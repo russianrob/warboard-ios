@@ -231,6 +231,22 @@ jobs:
           security cms -D -i "$PROFILE_PATH" \
             | plutil -extract Entitlements xml1 -o "$ENT_PATH" -
 
+          # Rewrite the main binary's LC_BUILD_VERSION load command to
+          # claim it was built with the iOS 26 SDK (xtool's Swift 6.0
+          # toolchain stamps iOS 18 SDK regardless of which Xcode SDK
+          # is around). Apple's "ITMS-90725: built with iOS 18 SDK"
+          # warning becomes a hard rejection on Apr 28 2026, so we
+          # need the binary itself — not just Info.plist — to claim
+          # iOS 26.2.
+          BIN_NAME="$(plutil -extract CFBundleExecutable raw "$APP_PATH/Info.plist")"
+          BIN_PATH="$APP_PATH/$BIN_NAME"
+          IOS_SDK_VER="$(xcrun --show-sdk-version --sdk iphoneos)"
+          echo "Rewriting build version: minos=18.0, sdk=$IOS_SDK_VER on $BIN_PATH"
+          xcrun vtool -set-build-version ios 18.0 "$IOS_SDK_VER" \
+            -replace -output "$BIN_PATH.new" "$BIN_PATH"
+          mv "$BIN_PATH.new" "$BIN_PATH"
+          xcrun vtool -show-build "$BIN_PATH" | head -20
+
           # Sign embedded frameworks first, then the app (inside-out).
           if [[ -d "$APP_PATH/Frameworks" ]]; then
             for fw in "$APP_PATH/Frameworks/"*; do
