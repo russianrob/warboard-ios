@@ -287,14 +287,14 @@ private struct MemberTable: View {
         ScrollView(.horizontal, showsIndicators: true) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 0) {
-                    cell("Name", w: 100, bold: true, align: .leading)
-                    cell("Lv",   w: 30,  bold: true)
-                    cell("Hits", w: 40,  bold: true)
-                    cell("Resp", w: 60,  bold: true, align: .trailing)
-                    cell("R/Hit", w: 50, bold: true, align: .trailing)
-                    cell("Def",  w: 35,  bold: true)
-                    cell("Bled", w: 50,  bold: true, align: .trailing)
-                    cell("Net",  w: 60,  bold: true, align: .trailing)
+                    cell("Name",  w: 100, align: .leading,  bold: true)
+                    cell("Lv",    w: 30,                    bold: true)
+                    cell("Hits",  w: 40,                    bold: true)
+                    cell("Resp",  w: 60,  align: .trailing, bold: true)
+                    cell("R/Hit", w: 50,  align: .trailing, bold: true)
+                    cell("Def",   w: 35,                    bold: true)
+                    cell("Bled",  w: 50,  align: .trailing, bold: true)
+                    cell("Net",   w: 60,  align: .trailing, bold: true)
                 }
                 .padding(.vertical, 4)
                 .background(Color(.systemGray5))
