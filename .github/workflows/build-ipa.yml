@@ -19,8 +19,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show Xcode version
-        run: xcodebuild -version
+      - name: Pick newest installed Xcode
+        # Apple requires the iOS 18 SDK minimum for App Store uploads
+        # (and iOS 26 SDK starting Apr 28 2026), so use the newest Xcode
+        # the runner has rather than the macos-latest default.
+        run: |
+          ls -d /Applications/Xcode*.app 2>/dev/null | sort -V
+          NEWEST="$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)"
+          if [[ -z "$NEWEST" ]]; then
+            echo "No Xcode found"; exit 1
+          fi
+          echo "Selecting $NEWEST"
+          sudo xcode-select -s "$NEWEST/Contents/Developer"
+          xcodebuild -version
+          xcrun --show-sdk-version --sdk iphoneos
+          echo "XCODE_APP=$NEWEST" >> "$GITHUB_ENV"
 
       - name: Install xtool
         run: brew install xtool-org/tap/xtool
@@ -28,7 +41,7 @@ jobs:
       - name: Wire xtool to the runner's iOS SDK
         # Reuses the pre-installed Xcode rather than downloading a
         # fresh Xcode.xip — saves ~15 GB and ~10 min per run.
-        run: xtool sdk install /Applications/Xcode.app
+        run: xtool sdk install "$XCODE_APP"
 
       - name: Resolve marketing version
         id: version
@@ -142,6 +155,44 @@ jobs:
 
           # Embed the App Store profile.
           cp "$PROFILE_PATH" "$APP_PATH/embedded.mobileprovision"
+
+          # xtool's IPA bundler omits the Xcode build-metadata keys
+          # that App Store Connect's altool validation requires. Patch
+          # them in from the runner's selected Xcode + iphoneos SDK.
+          PLIST="$APP_PATH/Info.plist"
+          IOS_SDK_VER="$(xcrun --show-sdk-version --sdk iphoneos)"
+          IOS_SDK_BUILD="$(xcrun --show-sdk-build-version --sdk iphoneos)"
+          XCODE_VER="$(xcodebuild -version | head -1 | awk '{print $2}')"
+          XCODE_BUILD="$(xcodebuild -version | tail -1 | awk '{print $3}')"
+          # DTXcode is zero-padded XX[YZ] (e.g. 16.4 → 1640, 26.1 → 2610).
+          XCODE_KEY="$(printf '%d%02d' "${XCODE_VER%%.*}" "$(echo "$XCODE_VER" | awk -F. '{print ($2==""?0:$2)*10}')")"
+          MAC_BUILD="$(sw_vers -buildVersion)"
+
+          for k in DTPlatformName DTPlatformVersion DTPlatformBuild \
+                   DTSDKName DTSDKBuild DTXcode DTXcodeBuild \
+                   DTCompiler BuildMachineOSBuild MinimumOSVersion; do
+            plutil -remove "$k" "$PLIST" 2>/dev/null || true
+          done
+          plutil -insert DTPlatformName       -string "iphoneos"                   "$PLIST"
+          plutil -insert DTPlatformVersion    -string "$IOS_SDK_VER"               "$PLIST"
+          plutil -insert DTPlatformBuild      -string "$IOS_SDK_BUILD"             "$PLIST"
+          plutil -insert DTSDKName            -string "iphoneos${IOS_SDK_VER}"     "$PLIST"
+          plutil -insert DTSDKBuild           -string "$IOS_SDK_BUILD"             "$PLIST"
+          plutil -insert DTXcode              -string "$XCODE_KEY"                 "$PLIST"
+          plutil -insert DTXcodeBuild         -string "$XCODE_BUILD"               "$PLIST"
+          plutil -insert DTCompiler           -string "com.apple.compilers.llvm.clang.1_0" "$PLIST"
+          plutil -insert BuildMachineOSBuild  -string "$MAC_BUILD"                 "$PLIST"
+          plutil -insert MinimumOSVersion     -string "17.0"                       "$PLIST"
+          # CFBundleVersion must be unique per TestFlight upload —
+          # re-derive from the marketing version + a monotonic counter
+          # (using the run id keeps it monotonic across builds).
+          plutil -replace CFBundleVersion -string "${{ github.run_number }}" "$PLIST" \
+            || plutil -insert CFBundleVersion -string "${{ github.run_number }}" "$PLIST"
+          plutil -replace CFBundleShortVersionString -string "${{ steps.version.outputs.VERSION }}" "$PLIST" \
+            || plutil -insert CFBundleShortVersionString -string "${{ steps.version.outputs.VERSION }}" "$PLIST"
+
+          echo "Patched Info.plist:"
+          plutil -p "$PLIST" | grep -E "(DT|MinimumOSVersion|CFBundleVersion|CFBundleShortVersionString|BuildMachine)"
 
           # Extract entitlements from the profile and write to a file
           # codesign can consume.

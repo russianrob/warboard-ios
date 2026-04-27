@@ -5,7 +5,10 @@ import PackageDescription
 let package = Package(
     name: "WarboardIOS",
     platforms: [
-        .iOS(.v17),
+        // Apple requires iOS 18 SDK minimum for App Store uploads
+        // (Apr 2026); deployment target stays iOS 17 since we don't
+        // need any iOS 18-only APIs yet.
+        .iOS(.v18),
         .macOS(.v14),
     ],
     products: [
