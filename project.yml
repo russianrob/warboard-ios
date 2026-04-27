@@ -7,6 +7,11 @@ options:
   deploymentTarget:
     iOS: "18.0"
 
+packages:
+  SocketIO:
+    url: https://github.com/socketio/socket.io-client-swift
+    from: "16.1.0"
+
 settings:
   base:
     MARKETING_VERSION: "0.3.0"
@@ -33,6 +38,8 @@ targets:
       - path: WarboardIOS/AppIcon/Assets.xcassets
     dependencies:
       - target: ChainWidget
+      - package: SocketIO
+        product: SocketIO
     settings:
       base:
         PROVISIONING_PROFILE_SPECIFIER: "Warboard App Store"

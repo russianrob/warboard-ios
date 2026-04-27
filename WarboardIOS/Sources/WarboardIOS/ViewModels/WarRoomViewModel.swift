@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import SocketIO
 
 /// War Room state holder. Polls `/api/faction/<fid>/war` + `/api/poll`
 /// every 15 s. Mirrors the Android `WarRoomViewModel` shape so future
@@ -55,6 +56,10 @@ final class WarRoomViewModel: ObservableObject {
     @Published private(set) var chainTimeoutDeadlineMs: Int64 = 0
     @Published private(set) var chainCooldownDeadlineMs: Int64 = 0
     private var lastChainCountForDeadline: Int?
+    /// Combine subscription bag for RealtimeClient events. Cancelled
+    /// when the VM stops so we don't keep getting events after the
+    /// War tab has been left.
+    private var realtimeBag = Set<AnyCancellable>()
 
     init() { }
 
@@ -68,13 +73,49 @@ final class WarRoomViewModel: ObservableObject {
         task = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.tick()
-                try? await Task.sleep(nanoseconds: 15_000_000_000)
+                // 60s polling fallback when the realtime socket is up
+                // (events drive most updates), 15s when it's down.
+                let interval: UInt64 = (await RealtimeClient.shared.connected)
+                    ? 60_000_000_000
+                    : 15_000_000_000
+                try? await Task.sleep(nanoseconds: interval)
             }
         }
+        subscribeToRealtimeEvents()
     }
 
     func stop() {
         task?.cancel(); task = nil
+        realtimeBag.removeAll()
+    }
+
+    /// Wire the RealtimeClient → ViewModel pipe. Most events just
+    /// trigger an immediate poll (refresh) — the server's payload is
+    /// rich but we'd be re-implementing every parser to apply it
+    /// in-place. A refresh round-trip is still ~10x faster than
+    /// waiting for the next 60 s poll.
+    private func subscribeToRealtimeEvents() {
+        realtimeBag.removeAll()
+        RealtimeClient.shared.events
+            .sink { [weak self] event in
+                guard let self = self else { return }
+                switch event {
+                case .warUpdate, .warState,
+                     .targetCalled, .targetUncalled,
+                     .statusUpdate, .statusUpdated, .statusesRefreshed:
+                    self.refresh()
+                case .warEnded:
+                    // Force a refresh so poll.warEnded flips and the
+                    // banner appears immediately rather than at the
+                    // next scheduled poll.
+                    self.refresh()
+                case .memberBars, .globalToast:
+                    // Not consumed here — FactionViewModel handles
+                    // member_bars; toasts are app-wide.
+                    break
+                }
+            }
+            .store(in: &realtimeBag)
     }
 
     func refresh() {
@@ -113,6 +154,10 @@ final class WarRoomViewModel: ObservableObject {
         guard let prefs = prefs, let auth = auth else { return }
         if prefs.apiKey.isEmpty { state = .noKey; return }
         guard let a = await auth.ensureAuth() else { state = .noKey; return }
+        // Realtime: connect once we have a JWT, then subscribe to the
+        // war's room as soon as we know the warId. Idempotent — the
+        // client no-ops when already connected with the same JWT.
+        RealtimeClient.shared.connect(baseUrl: prefs.baseUrl, jwt: a.token)
         lastTickRequestStartMs = Int64(Date().timeIntervalSince1970 * 1000)
         let wars = await WarboardAPI.fetchWars(
             baseUrl: prefs.baseUrl, factionId: a.factionId, jwt: a.token
@@ -121,6 +166,7 @@ final class WarRoomViewModel: ObservableObject {
         if wars.isEmpty { state = .noWar; return }
         let merged = mergeMonotonic(wars[0])
         state = .active(merged)
+        RealtimeClient.shared.joinWar(warId: merged.warId, factionId: a.factionId)
         if let fresh = await WarboardAPI.fetchPoll(
             baseUrl: prefs.baseUrl, jwt: a.token, warId: merged.warId
         ) {
