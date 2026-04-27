@@ -31,6 +31,10 @@ targets:
       - path: WarboardIOS/AppIcon/Assets.xcassets
     dependencies:
       - target: ChainWidget
+    settings:
+      base:
+        PROVISIONING_PROFILE_SPECIFIER: "Warboard App Store"
+        PRODUCT_BUNDLE_IDENTIFIER: com.tornwar.warboard
     info:
       path: WarboardIOS/Resources/Info.plist
       properties:
@@ -72,3 +76,5 @@ targets:
     settings:
       base:
         SKIP_INSTALL: NO
+        PROVISIONING_PROFILE_SPECIFIER: "Warboard ChainWidget App Store"
+        PRODUCT_BUNDLE_IDENTIFIER: com.tornwar.warboard.ChainWidget
