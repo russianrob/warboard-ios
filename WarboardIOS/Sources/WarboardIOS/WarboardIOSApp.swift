@@ -2,32 +2,33 @@ import SwiftUI
 import UIKit
 import UserNotifications
 
+/// Top-level scene. TabView root mirrors the Android warboard-native
+/// app's bottom navigation (Status / War / Faction / Settings). The
+/// AppDelegate exists only to surface the APNs device-token callback
+/// — SwiftUI's lifecycle doesn't expose that natively.
 @main
 struct WarboardIOSApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @StateObject private var prefs = PrefsStore()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(prefs)
         }
     }
 }
 
-/// AppDelegate exists for the bits SwiftUI's lifecycle doesn't expose
-/// natively — most importantly, APNs device-token registration. The
-/// SwiftUI App protocol can't surface
-/// `application(_:didRegisterForRemoteNotificationsWithDeviceToken:)`
-/// without a UIKit bridge.
+/// Bridges the bits SwiftUI's lifecycle doesn't expose — primarily
+/// APNs device-token registration. Foreground-banner presentation
+/// is also forced here so server-pushed alerts surface even when the
+/// app is in front (default would suppress them).
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
-
     func application(
         _ application: UIApplication,
-        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
-        // Request notification permission on first launch. iOS shows
-        // the system prompt the first time we ask; subsequent calls
-        // resolve silently against the prior answer.
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, err in
             if let err = err {
                 NSLog("[Warboard] Notification authorization error: \(err.localizedDescription)")
@@ -43,7 +44,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 
     func application(
         _ application: UIApplication,
-        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data,
+        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
         let token = deviceToken.map { String(format: "%02x", $0) }.joined()
         NSLog("[Warboard] APNs device token: \(token.prefix(16))…")
@@ -52,26 +53,23 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 
     func application(
         _ application: UIApplication,
-        didFailToRegisterForRemoteNotificationsWithError error: Error,
+        didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
         NSLog("[Warboard] APNs register failed: \(error.localizedDescription)")
     }
 
-    /// Remote notification arrived while the app is in the foreground.
-    /// Show it as a banner anyway (default would suppress).
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
-        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         completionHandler([.banner, .sound, .badge])
     }
 }
 
 /// HTTP client for warboard's `/api/apns/subscribe` endpoint. Mirrors
-/// the Android side's `WarboardMessagingService.registerToken` but
-/// targets APNs instead of FCM. Server-side the storage shape is the
-/// same — just a different `platform` discriminator.
+/// the Android side's FCM subscribe — same storage shape, different
+/// `platform` discriminator.
 enum TornwarApnsClient {
     static func register(token: String) {
         let prefs = UserDefaults.standard
@@ -85,10 +83,10 @@ enum TornwarApnsClient {
 
         let bundleId = Bundle.main.bundleIdentifier ?? "com.tornwar.warboard"
         let body: [String: Any] = [
-            "key":        apiKey,
-            "token":      token,
-            "platform":   "ios",
-            "appBundle":  bundleId,
+            "key":       apiKey,
+            "token":     token,
+            "platform":  "ios",
+            "appBundle": bundleId,
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: body) else { return }
 

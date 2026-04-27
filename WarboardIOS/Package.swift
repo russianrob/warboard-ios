@@ -6,8 +6,8 @@ let package = Package(
     name: "WarboardIOS",
     platforms: [
         // Apple requires iOS 18 SDK minimum for App Store uploads
-        // (Apr 2026); deployment target stays iOS 17 since we don't
-        // need any iOS 18-only APIs yet.
+        // (Apr 2026). Deployment target also iOS 18 — keeping the
+        // Info.plist's MinimumOSVersion in sync (ITMS-90208).
         .iOS(.v18),
         .macOS(.v14),
     ],
@@ -22,21 +22,10 @@ let package = Package(
     targets: [
         .target(
             name: "WarboardIOS",
-            // Userscripts and the GM_* shim are loaded from app assets
-            // at runtime via Bundle.module.url(forResource:withExtension:).
-            // Process means SwiftPM lowercases extensions and validates
-            // them; .copy keeps the original filename verbatim. We use
-            // .copy because the userscripts have multi-dot extensions
-            // (.user.js) that Process would mangle.
-            resources: [
-                .copy("Resources/factionops.user.js"),
-                .copy("Resources/oc-spawn-assistance.user.js"),
-                .copy("Resources/gm-shim.js"),
-            ],
             // swift-tools-version 6.0 defaults to Swift 6 strict
-            // concurrency, which trips on UNUserNotificationCenterDelegate
-            // conformance and a few WKWebView call sites. Stay on
-            // Swift 5 mode until those are addressed properly.
+            // concurrency. Stay on Swift 5 mode for now — the Combine /
+            // ObservableObject patterns ported from warboard-mac don't
+            // pass strict checks without rewriting actor isolation.
             swiftSettings: [
                 .swiftLanguageMode(.v5)
             ]
