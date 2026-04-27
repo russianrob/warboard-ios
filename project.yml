@@ -1,0 +1,74 @@
+# xcodegen spec — `xcodegen generate` produces Warboard.xcodeproj.
+# Replaces the prior xtool/SwiftPM build because Live Activities
+# require a Widget Extension target, which xtool doesn't support.
+name: Warboard
+options:
+  bundleIdPrefix: com.tornwar
+  deploymentTarget:
+    iOS: "18.0"
+
+settings:
+  base:
+    MARKETING_VERSION: "0.3.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: "Manual"
+    CODE_SIGNING_REQUIRED: "NO"
+    CODE_SIGNING_ALLOWED: "NO"
+    SWIFT_VERSION: "5.9"
+    ENABLE_PREVIEWS: "YES"
+    TARGETED_DEVICE_FAMILY: "1,2"   # iPhone + iPad
+
+targets:
+  Warboard:
+    type: application
+    platform: iOS
+    sources:
+      - path: WarboardIOS/Sources/WarboardIOS
+      - path: WarboardIOS/Sources/Shared
+    resources:
+      - path: WarboardIOS/AppIcon/Assets.xcassets
+    dependencies:
+      - target: ChainWidget
+    info:
+      path: WarboardIOS/Resources/Info.plist
+      properties:
+        CFBundleName: Warboard
+        CFBundleDisplayName: Warboard
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleIdentifier: com.tornwar.warboard
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        # Required for Live Activities (Dynamic Island).
+        NSSupportsLiveActivities: true
+        # We answer App Store Connect's encryption-export question
+        # up front — only HTTPS, no novel crypto → no compliance prompt.
+        ITSAppUsesNonExemptEncryption: false
+        # Push Notifications capability — APNs for chain / vault alerts.
+        UIBackgroundModes:
+          - remote-notification
+
+  ChainWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: WarboardIOS/Sources/ChainWidget
+      - path: WarboardIOS/Sources/Shared
+    info:
+      path: WarboardIOS/Sources/ChainWidget/Info.plist
+      properties:
+        CFBundleName: ChainWidget
+        CFBundleDisplayName: Warboard Chain
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleIdentifier: com.tornwar.warboard.ChainWidget
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        SKIP_INSTALL: NO

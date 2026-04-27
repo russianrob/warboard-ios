@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>method</key>
+    <string>app-store-connect</string>
+    <key>destination</key>
+    <string>export</string>
+    <key>teamID</key>
+    <string>DAD59U75G9</string>
+    <key>signingStyle</key>
+    <string>manual</string>
+    <key>signingCertificate</key>
+    <string>Apple Distribution: Robert Hay (DAD59U75G9)</string>
+    <key>provisioningProfiles</key>
+    <dict>
+        <key>com.tornwar.warboard</key>
+        <string>Warboard App Store</string>
+        <key>com.tornwar.warboard.ChainWidget</key>
+        <string>Warboard ChainWidget App Store</string>
+    </dict>
+    <key>uploadSymbols</key>
+    <true/>
+    <key>compileBitcode</key>
+    <false/>
+    <key>stripSwiftSymbols</key>
+    <true/>
+</dict>
+</plist>

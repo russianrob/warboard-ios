@@ -138,6 +138,27 @@ final class WarRoomViewModel: ObservableObject {
         )
         updateChainDeadlines(merged: merged)
         evaluateChainAlerts(prefs: prefs)
+        syncLiveActivity(merged: merged)
+    }
+
+    /// Mirror the chain state into the Live Activity so the lock-screen
+    /// banner + Dynamic Island show the same countdown the in-app
+    /// ChainBar does.
+    private func syncLiveActivity(merged: WarSnapshot) {
+        let chain = poll?.chainCurrent ?? merged.chainCurrent ?? 0
+        let myScore    = poll?.myScore    ?? merged.myScore
+        let enemyScore = poll?.enemyScore ?? merged.enemyScore
+        let enemyName  = merged.enemyFactionName ?? poll?.enemyFactionName ?? "Enemy"
+        ChainLiveActivityController.shared.sync(
+            warId: merged.warId,
+            enemyName: enemyName,
+            chain: chain,
+            timeoutDeadlineMs: chainTimeoutDeadlineMs,
+            cooldownDeadlineMs: chainCooldownDeadlineMs,
+            myScore: myScore,
+            enemyScore: enemyScore,
+            warEnded: poll?.warEnded == true
+        )
     }
 
     /// Convert the freshly-fetched chain timeout/cooldown seconds into
