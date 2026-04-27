@@ -50,8 +50,15 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleIdentifier: com.tornwar.warboard
         UILaunchScreen: {}
+        # All four orientations declared so iPad multitasking is
+        # supported (Apple validates this regardless of
+        # TARGETED_DEVICE_FAMILY). The actual app is portrait-first;
+        # rotating doesn't break anything but also isn't optimized.
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         # Required for Live Activities (Dynamic Island).
