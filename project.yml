@@ -35,6 +35,9 @@ targets:
       base:
         PROVISIONING_PROFILE_SPECIFIER: "Warboard App Store"
         PRODUCT_BUNDLE_IDENTIFIER: com.tornwar.warboard
+        DEVELOPMENT_TEAM: DAD59U75G9
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "Apple Distribution"
     info:
       path: WarboardIOS/Resources/Info.plist
       properties:
@@ -78,3 +81,6 @@ targets:
         SKIP_INSTALL: NO
         PROVISIONING_PROFILE_SPECIFIER: "Warboard ChainWidget App Store"
         PRODUCT_BUNDLE_IDENTIFIER: com.tornwar.warboard.ChainWidget
+        DEVELOPMENT_TEAM: DAD59U75G9
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "Apple Distribution"
