@@ -57,17 +57,17 @@ jobs:
         id: locate
         working-directory: WarboardIOS
         run: |
-          IPA_PATH="$(find .build -type f -name '*.ipa' -print -quit)"
+          # xtool writes to WarboardIOS/xtool/<TargetName>.ipa, not .build/.
+          IPA_PATH="$(find xtool .build -type f -name '*.ipa' -print -quit 2>/dev/null)"
           if [[ -z "$IPA_PATH" ]]; then
-            echo "No IPA produced — checking what xtool did:"
-            find .build -maxdepth 4 -type f | head -40
+            echo "No IPA produced — listing recent files:"
+            find . -maxdepth 4 -type f \( -name '*.ipa' -o -name '*.app' \) 2>/dev/null
             exit 1
           fi
-          # Rename to versioned filename for upload + release.
           IPA_NAME="Warboard-${{ steps.version.outputs.VERSION }}.ipa"
           mv "$IPA_PATH" "$IPA_NAME"
           echo "IPA_NAME=$IPA_NAME" >> "$GITHUB_OUTPUT"
-          echo "IPA_PATH=$IPA_NAME" >> "$GITHUB_ENV"
+          ls -la "$IPA_NAME"
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
