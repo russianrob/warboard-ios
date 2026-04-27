@@ -18,14 +18,23 @@ struct DashboardView: View {
             case .error(let msg):
                 MessageView(icon: "exclamationmark.triangle.fill", text: msg)
             case .ready(let snap):
-                ScrollView { DashboardBody(snap: snap, nowMs: nowMs).padding(16) }
+                ScrollView {
+                    DashboardBody(snap: snap, nowMs: nowMs).padding(16)
+                }
+                .refreshable { await vm.refresh() }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("Status")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button(action: { vm.refresh() }) { Image(systemName: "arrow.clockwise") }
+                if vm.refreshing {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button { Task { await vm.refresh() } } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                }
             }
         }
         .onAppear { vm.bind(prefs: prefs); vm.start() }

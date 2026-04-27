@@ -11,6 +11,9 @@ final class DashboardViewModel: ObservableObject {
     }
 
     @Published private(set) var state: State = .loading
+    /// True while a fetch is in flight — the toolbar button swaps to a
+    /// spinner so the user gets immediate feedback that the tap landed.
+    @Published private(set) var refreshing = false
 
     private var prefs: PrefsStore?
     private var auth: AuthRepository?
@@ -31,9 +34,11 @@ final class DashboardViewModel: ObservableObject {
         }
     }
     func stop() { task?.cancel(); task = nil }
-    func refresh() { Task { await tick() } }
+    func refresh() async { await tick() }
 
     private func tick() async {
+        refreshing = true
+        defer { refreshing = false }
         guard let prefs = prefs else { return }
         if prefs.apiKey.isEmpty { state = .noKey; return }
         guard let snap = await TornAPI.fetchDashboard(apiKey: prefs.apiKey) else {
