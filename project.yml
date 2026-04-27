@@ -11,7 +11,7 @@ settings:
   base:
     MARKETING_VERSION: "0.3.0"
     CURRENT_PROJECT_VERSION: "1"
-    DEVELOPMENT_TEAM: DAD59U75G9
+    DEVELOPMENT_TEAM: "DAD59U75G9"
     CODE_SIGN_STYLE: Manual
     CODE_SIGN_IDENTITY: "Apple Distribution"
     SWIFT_VERSION: "5.9"
@@ -33,7 +33,7 @@ targets:
       base:
         PROVISIONING_PROFILE_SPECIFIER: "Warboard App Store"
         PRODUCT_BUNDLE_IDENTIFIER: com.tornwar.warboard
-        DEVELOPMENT_TEAM: DAD59U75G9
+        DEVELOPMENT_TEAM: "DAD59U75G9"
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: "Apple Distribution"
     info:
@@ -79,6 +79,6 @@ targets:
         SKIP_INSTALL: NO
         PROVISIONING_PROFILE_SPECIFIER: "Warboard ChainWidget App Store"
         PRODUCT_BUNDLE_IDENTIFIER: com.tornwar.warboard.ChainWidget
-        DEVELOPMENT_TEAM: DAD59U75G9
+        DEVELOPMENT_TEAM: "DAD59U75G9"
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: "Apple Distribution"

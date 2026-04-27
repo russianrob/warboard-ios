@@ -119,6 +119,15 @@ jobs:
         env:
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
+          echo "TEAM_ID=$TEAM_ID (length ${#TEAM_ID})"
+          # Sanity-check: dump the resolved DEVELOPMENT_TEAM xcodebuild
+          # would use. Helps catch empty / mismatched team IDs early.
+          xcodebuild -showBuildSettings \
+            -project Warboard.xcodeproj \
+            -scheme Warboard \
+            -configuration Release \
+            DEVELOPMENT_TEAM="$TEAM_ID" 2>/dev/null | \
+            grep -E "^[[:space:]]+(DEVELOPMENT_TEAM|CODE_SIGN_IDENTITY|PROVISIONING_PROFILE_SPECIFIER|PRODUCT_BUNDLE_IDENTIFIER) " | head -20
           xcodebuild archive \
             -project Warboard.xcodeproj \
             -scheme Warboard \
