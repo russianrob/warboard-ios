@@ -309,13 +309,13 @@ private struct TargetList: View {
         .listStyle(.plain)
     }
 
-    /// Sort priority — actionable targets at top, unavailable at the
-    /// bottom. Called targets are pushed to the very bottom (priority
-    /// 9) so they don't clutter the actionable list once a teammate
-    /// has them; user explicitly wants them out of view after the
-    /// call action lands.
+    /// Sort priority — called targets pinned to the very top (you're
+    /// committing to attack, want quick access), then actionable
+    /// targets, then unavailable at the bottom. This is the inverse
+    /// of the previous bottom-pinning; user wants their called
+    /// targets surfaced for fast tap-through.
     private func priority(_ t: EnemyTarget) -> Double {
-        if !(t.calledBy ?? "").isEmpty { return 9.0 }
+        if !(t.calledBy ?? "").isEmpty { return 0.0 }
         switch t.status.lowercased() {
         case "okay", "ok":          return t.activity == "online" ? 1.0 : 1.5
         case "hospital":            return 2.0
