@@ -115,19 +115,15 @@ jobs:
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
 
       - name: Archive (Release, signed)
+        # DEVELOPMENT_TEAM, CODE_SIGN_IDENTITY, CODE_SIGN_STYLE,
+        # PROVISIONING_PROFILE_SPECIFIER are baked into project.yml
+        # per-target (team is the same for all our apps; identity is
+        # the only Apple Distribution cert we have). No command-line
+        # overrides needed — passing `DEVELOPMENT_TEAM=""` (when the
+        # secret was unset) silently defeated the project.yml value
+        # because xcodebuild treats command-line overrides as final.
         if: steps.sign_check.outputs.available == 'true'
-        env:
-          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          echo "TEAM_ID=$TEAM_ID (length ${#TEAM_ID})"
-          # Sanity-check: dump the resolved DEVELOPMENT_TEAM xcodebuild
-          # would use. Helps catch empty / mismatched team IDs early.
-          xcodebuild -showBuildSettings \
-            -project Warboard.xcodeproj \
-            -scheme Warboard \
-            -configuration Release \
-            DEVELOPMENT_TEAM="$TEAM_ID" 2>/dev/null | \
-            grep -E "^[[:space:]]+(DEVELOPMENT_TEAM|CODE_SIGN_IDENTITY|PROVISIONING_PROFILE_SPECIFIER|PRODUCT_BUNDLE_IDENTIFIER) " | head -20
           xcodebuild archive \
             -project Warboard.xcodeproj \
             -scheme Warboard \
@@ -136,9 +132,6 @@ jobs:
             -archivePath "$RUNNER_TEMP/Warboard.xcarchive" \
             MARKETING_VERSION="${{ steps.version.outputs.VERSION }}" \
             CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
-            DEVELOPMENT_TEAM="$TEAM_ID" \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            CODE_SIGN_STYLE=Manual \
             CODE_SIGNING_REQUIRED=YES \
             CODE_SIGNING_ALLOWED=YES \
             OTHER_CODE_SIGN_FLAGS="--timestamp"
