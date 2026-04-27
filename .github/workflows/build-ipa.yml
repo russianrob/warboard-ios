@@ -222,8 +222,16 @@ jobs:
           plutil -replace CFBundleShortVersionString -string "${{ steps.version.outputs.VERSION }}" "$PLIST" \
             || plutil -insert CFBundleShortVersionString -string "${{ steps.version.outputs.VERSION }}" "$PLIST"
 
+          # Bake in the App Store export-compliance answer so users
+          # don't get the "Missing Compliance" prompt on every new
+          # TestFlight build. We only use HTTPS (no novel crypto), so
+          # the answer is always "no non-exempt encryption" → the
+          # build clears compliance automatically.
+          plutil -replace ITSAppUsesNonExemptEncryption -bool false "$PLIST" \
+            || plutil -insert ITSAppUsesNonExemptEncryption -bool false "$PLIST"
+
           echo "Patched Info.plist:"
-          plutil -p "$PLIST" | grep -E "(DT|MinimumOSVersion|CFBundleVersion|CFBundleShortVersionString|BuildMachine)"
+          plutil -p "$PLIST" | grep -E "(DT|MinimumOSVersion|CFBundleVersion|CFBundleShortVersionString|BuildMachine|ITSApp)"
 
           # Extract entitlements from the profile and write to a file
           # codesign can consume.
