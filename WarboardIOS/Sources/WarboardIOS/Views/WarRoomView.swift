@@ -121,16 +121,52 @@ private struct WarBody: View {
     let onUncall: (EnemyTarget) -> Void
 
     var body: some View {
+        let warEnded = poll?.warEnded == true
         VStack(spacing: 0) {
             HeaderCard(war: war, poll: poll, nowMs: nowMs,
                        chainTimeoutDeadlineMs: chainTimeoutDeadlineMs,
                        chainCooldownDeadlineMs: chainCooldownDeadlineMs)
                 .padding(12)
+            if warEnded {
+                WarEndedBanner(war: war, poll: poll)
+            }
             Divider()
             TargetList(war: war, nowMs: nowMs,
                        enemyStats: enemyStats, travelInfo: travelInfo,
                        onCall: onCall, onUncall: onUncall)
+                .opacity(warEnded ? 0.4 : 1.0)
+                .allowsHitTesting(!warEnded)
         }
+    }
+}
+
+/// Post-war banner — VICTORY / DEFEAT / DRAW with the final score.
+/// Mirrors the factionops userscript's showWarEndedBanner styling
+/// (green/red/yellow tints).
+private struct WarEndedBanner: View {
+    let war: WarSnapshot
+    let poll: WarPoll?
+
+    var body: some View {
+        let myScore    = poll?.myScore    ?? war.myScore
+        let enemyScore = poll?.enemyScore ?? war.enemyScore
+        let result: (label: String, color: Color, bg: Color) = {
+            if myScore > enemyScore   { return ("VICTORY", Color(red: 0.00, green: 0.72, blue: 0.58), Color(red: 0.00, green: 0.72, blue: 0.58).opacity(0.12)) }
+            if enemyScore > myScore   { return ("DEFEAT",  Color(red: 1.00, green: 0.46, blue: 0.46), Color(red: 1.00, green: 0.46, blue: 0.46).opacity(0.12)) }
+            return ("DRAW", Color(red: 0.99, green: 0.80, blue: 0.43), Color(red: 0.99, green: 0.80, blue: 0.43).opacity(0.12))
+        }()
+        VStack(spacing: 4) {
+            Text(result.label)
+                .font(.system(size: 22, weight: .heavy, design: .rounded))
+                .tracking(2)
+                .foregroundColor(result.color)
+            Text("\(myScore) – \(enemyScore)")
+                .font(.subheadline.monospacedDigit())
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .background(result.bg)
     }
 }
 
@@ -187,6 +223,10 @@ private struct WarTimerRow: View {
     let nowMs: Int64
 
     var body: some View {
+        // War over — banner takes over below; suppress the countdown.
+        if poll?.warEnded == true {
+            return AnyView(EmptyView())
+        }
         let myScore    = poll?.myScore    ?? war.myScore
         let enemyScore = poll?.enemyScore ?? war.enemyScore
         let target     = poll?.targetScore ?? war.currentTarget ?? 0
