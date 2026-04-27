@@ -25,7 +25,11 @@ targets:
     sources:
       - path: WarboardIOS/Sources/WarboardIOS
       - path: WarboardIOS/Sources/Shared
-    resources:
+      # Asset catalog goes in `sources` (not `resources`) so xcodegen
+      # adds it to the Compile Sources build phase, which actool then
+      # picks up. Listing it under resources would copy the raw
+      # .xcassets directory into the bundle without compiling — and
+      # iOS only loads icons from a compiled Assets.car.
       - path: WarboardIOS/AppIcon/Assets.xcassets
     dependencies:
       - target: ChainWidget
