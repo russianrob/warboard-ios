@@ -210,7 +210,10 @@ jobs:
           plutil -insert DTXcodeBuild         -string "$XCODE_BUILD"               "$PLIST"
           plutil -insert DTCompiler           -string "com.apple.compilers.llvm.clang.1_0" "$PLIST"
           plutil -insert BuildMachineOSBuild  -string "$MAC_BUILD"                 "$PLIST"
-          plutil -insert MinimumOSVersion     -string "17.0"                       "$PLIST"
+          # Must match Package.swift's deployment target (.iOS(.v18))
+          # — Apple rejects (ITMS-90208) when the binary needs a higher
+          # iOS than the Info.plist advertises.
+          plutil -insert MinimumOSVersion     -string "18.0"                       "$PLIST"
           # CFBundleVersion must be unique per TestFlight upload —
           # re-derive from the marketing version + a monotonic counter
           # (using the run id keeps it monotonic across builds).
