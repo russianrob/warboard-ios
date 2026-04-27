@@ -156,6 +156,41 @@ jobs:
           # Embed the App Store profile.
           cp "$PROFILE_PATH" "$APP_PATH/embedded.mobileprovision"
 
+          # Compile the iOS app icon asset catalog and drop the
+          # generated Assets.car + icon variants into the .app root.
+          # actool also writes a partial Info.plist with the
+          # CFBundleIcons / CFBundleIconName keys App Store requires.
+          ICON_OUT="$WORK/icon-out"
+          ICON_PLIST="$WORK/icon-partial.plist"
+          mkdir -p "$ICON_OUT"
+          xcrun actool \
+            "$GITHUB_WORKSPACE/WarboardIOS/AppIcon/Assets.xcassets" \
+            --compile "$ICON_OUT" \
+            --platform iphoneos \
+            --minimum-deployment-target 17.0 \
+            --target-device iphone \
+            --target-device ipad \
+            --app-icon AppIcon \
+            --output-partial-info-plist "$ICON_PLIST" \
+            --output-format human-readable-text \
+            --notices --warnings
+          # Copy compiled icon assets into the .app root.
+          cp -R "$ICON_OUT/"* "$APP_PATH/"
+          # Merge actool's partial plist into the app's Info.plist
+          # via Python — plutil's inline -xml insert is fragile for
+          # nested dict values.
+          if [[ -f "$ICON_PLIST" ]]; then
+            python3 - "$APP_PATH/Info.plist" "$ICON_PLIST" <<'PYEOF'
+import plistlib, sys
+app_path, icon_path = sys.argv[1], sys.argv[2]
+with open(app_path, "rb") as f: app = plistlib.load(f)
+with open(icon_path, "rb") as f: icon = plistlib.load(f)
+app.update(icon)
+with open(app_path, "wb") as f: plistlib.dump(app, f)
+print("Merged icon keys into Info.plist:", list(icon.keys()))
+PYEOF
+          fi
+
           # xtool's IPA bundler omits the Xcode build-metadata keys
           # that App Store Connect's altool validation requires. Patch
           # them in from the runner's selected Xcode + iphoneos SDK.
@@ -240,11 +275,20 @@ jobs:
           mkdir -p "$KEY_DIR"
           echo "$ASC_API_KEY_BASE64" | base64 --decode -o "$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8"
 
+          # altool sometimes exits 0 even when validation fails — log
+          # it explicitly and grep the output for the failure marker.
+          set +e
           xcrun altool --upload-app \
             --type ios \
             --file "$SIGNED_IPA" \
             --apiKey "$ASC_KEY_ID" \
-            --apiIssuer "$ASC_ISSUER_ID"
+            --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tee altool.log
+          STATUS=${PIPESTATUS[0]}
+          if [[ $STATUS -ne 0 ]] || grep -qE "UPLOAD FAILED|Validation failed|ERROR ITMS-" altool.log; then
+            echo "altool reported failure (exit=$STATUS)."
+            exit 1
+          fi
+          echo "TestFlight upload succeeded."
 
       - name: Stage final artifact
         # Pick the signed IPA when present, otherwise the unsigned one
