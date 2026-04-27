@@ -16,7 +16,7 @@ settings:
     CODE_SIGN_IDENTITY: "Apple Distribution"
     SWIFT_VERSION: "5.9"
     ENABLE_PREVIEWS: "YES"
-    TARGETED_DEVICE_FAMILY: "1,2"   # iPhone + iPad
+    TARGETED_DEVICE_FAMILY: "1"     # iPhone only — iPad would force all 4 orientations
 
 targets:
   Warboard:
@@ -41,6 +41,7 @@ targets:
       properties:
         CFBundleName: Warboard
         CFBundleDisplayName: Warboard
+        CFBundleIconName: AppIcon
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleIdentifier: com.tornwar.warboard
