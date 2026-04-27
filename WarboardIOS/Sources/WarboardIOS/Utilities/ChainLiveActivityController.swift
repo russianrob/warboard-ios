@@ -13,6 +13,16 @@ final class ChainLiveActivityController {
     private init() {}
 
     private var current: Activity<ChainActivityAttributes>?
+    /// Track the most recent (chain, deadline) we pushed so we can
+    /// reject staler deadline values from a slower data source. The
+    /// war room's /api/poll goes through warboard's chain cache which
+    /// can be 5+ s behind /v2/faction direct (what the chain ticker
+    /// uses) — without this guard a stale war-room write right after
+    /// a fresh ticker write would push the displayed deadline back
+    /// up by several seconds.
+    private var lastChain: Int = -1
+    private var lastTimeoutDeadlineMs: Int64 = 0
+    private var lastCooldownDeadlineMs: Int64 = 0
 
     /// Update — or start, or end — the chain Live Activity to match
     /// the war room's current state. Idempotent: calling this on every
@@ -33,10 +43,29 @@ final class ChainLiveActivityController {
             return
         }
 
+        // Freshness guard — when chain count is unchanged, only accept
+        // a deadline if it's lower (= fresher) than what we last
+        // displayed. Prevents a stale source (warboard cache) from
+        // bumping the live activity countdown back up after a fresher
+        // source (Torn direct) already displayed a smaller deadline.
+        var effectiveTimeout = timeoutDeadlineMs
+        var effectiveCooldown = cooldownDeadlineMs
+        if chain == lastChain {
+            if effectiveTimeout > 0 && lastTimeoutDeadlineMs > 0 {
+                effectiveTimeout = min(effectiveTimeout, lastTimeoutDeadlineMs)
+            }
+            if effectiveCooldown > 0 && lastCooldownDeadlineMs > 0 {
+                effectiveCooldown = min(effectiveCooldown, lastCooldownDeadlineMs)
+            }
+        }
+        lastChain = chain
+        lastTimeoutDeadlineMs = effectiveTimeout
+        lastCooldownDeadlineMs = effectiveCooldown
+
         let state = ChainActivityAttributes.ContentState(
             chain: chain,
-            timeoutDeadlineMs: timeoutDeadlineMs,
-            cooldownDeadlineMs: cooldownDeadlineMs,
+            timeoutDeadlineMs: effectiveTimeout,
+            cooldownDeadlineMs: effectiveCooldown,
             myScore: myScore,
             enemyScore: enemyScore
         )
@@ -52,6 +81,11 @@ final class ChainLiveActivityController {
                 Task { await active.end(nil, dismissalPolicy: .immediate) }
                 current = nil
             }
+            // Reset freshness guard so a brand-new chain doesn't
+            // inherit the prior min deadline.
+            lastChain = -1
+            lastTimeoutDeadlineMs = 0
+            lastCooldownDeadlineMs = 0
             return
         }
 

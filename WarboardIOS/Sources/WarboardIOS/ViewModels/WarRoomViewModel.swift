@@ -192,7 +192,7 @@ final class WarRoomViewModel: ObservableObject {
         travelInfo = await WarboardAPI.fetchTravelInfo(
             baseUrl: prefs.baseUrl, jwt: a.token, warId: merged.warId
         )
-        updateChainDeadlines(merged: merged)
+        await updateChainDeadlines(merged: merged)
         evaluateChainAlerts(prefs: prefs)
         syncLiveActivity(merged: merged)
     }
@@ -222,18 +222,25 @@ final class WarRoomViewModel: ObservableObject {
     /// countdown each render via (deadline - now). Same min-of-(prev,
     /// new) trick as the menu-bar ticker so a stale Torn cache can't
     /// bump the timer back up.
-    private func updateChainDeadlines(merged: WarSnapshot) {
-        let chain = poll?.chainCurrent ?? merged.chainCurrent ?? 0
-        let toSec = (poll?.chainTimeout  ?? merged.chainTimeout)  ?? 0
-        let cdSec = (poll?.chainCooldown ?? merged.chainCooldown) ?? 0
-        // Anchor on when we SENT the request (lastTickRequestStartMs)
-        // rather than now (which is post-RTT). This subtracts roughly
-        // the network round-trip from the stamped deadline so the
-        // displayed countdown stays in sync with Torn's instead of
-        // running 1-2 s ahead.
-        let anchor = lastTickRequestStartMs > 0
+    private func updateChainDeadlines(merged: WarSnapshot) async {
+        // Bypass warboard's chain cache (which can be 5+ s stale)
+        // and pull chain directly from Torn /v2/faction. Anchor the
+        // deadline on the request-start time so we also subtract
+        // the network RTT.
+        let chainRequestStart = Int64(Date().timeIntervalSince1970 * 1000)
+        var chain = poll?.chainCurrent ?? merged.chainCurrent ?? 0
+        var toSec = (poll?.chainTimeout  ?? merged.chainTimeout)  ?? 0
+        var cdSec = (poll?.chainCooldown ?? merged.chainCooldown) ?? 0
+        var anchor = lastTickRequestStartMs > 0
             ? lastTickRequestStartMs
             : Int64(Date().timeIntervalSince1970 * 1000)
+        if let prefs = prefs,
+           let fresh = await TornAPI.fetchFactionChain(apiKey: prefs.apiKey) {
+            chain = fresh.current
+            toSec = fresh.timeout
+            cdSec = fresh.cooldown
+            anchor = chainRequestStart
+        }
         let incomingTo = toSec > 0 ? anchor + toSec * 1000 : 0
         let incomingCd = cdSec > 0 ? anchor + cdSec * 1000 : 0
         let countChanged = lastChainCountForDeadline != chain

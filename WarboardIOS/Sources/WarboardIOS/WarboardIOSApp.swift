@@ -22,11 +22,13 @@ struct WarboardIOSApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(prefs)
+                .environmentObject(chainTicker)
                 .task {
                     // Always-on chain poller — feeds the Live Activity
                     // even when no war is active, so users see the
                     // chain countdown in the Dynamic Island anytime
-                    // the faction is mid-chain.
+                    // the faction is mid-chain. Also drives the Status
+                    // tab's Chain bar.
                     chainTicker.start()
                 }
         }
