@@ -150,11 +150,15 @@ private struct WarEndedBanner: View {
     var body: some View {
         let myScore    = poll?.myScore    ?? war.myScore
         let enemyScore = poll?.enemyScore ?? war.enemyScore
-        let result: (label: String, color: Color, bg: Color) = {
-            if myScore > enemyScore   { return ("VICTORY", Color(red: 0.00, green: 0.72, blue: 0.58), Color(red: 0.00, green: 0.72, blue: 0.58).opacity(0.12)) }
-            if enemyScore > myScore   { return ("DEFEAT",  Color(red: 1.00, green: 0.46, blue: 0.46), Color(red: 1.00, green: 0.46, blue: 0.46).opacity(0.12)) }
-            return ("DRAW", Color(red: 0.99, green: 0.80, blue: 0.43), Color(red: 0.99, green: 0.80, blue: 0.43).opacity(0.12))
-        }()
+        // Torn ranked wars always have a winner — no draw case to
+        // worry about. Tie-on-score (transient between polls) just
+        // falls through to DEFEAT, which the next tick corrects.
+        let isVictory = myScore > enemyScore
+        let result: (label: String, color: Color, bg: Color) = isVictory
+            ? ("VICTORY", Color(red: 0.00, green: 0.72, blue: 0.58),
+                          Color(red: 0.00, green: 0.72, blue: 0.58).opacity(0.12))
+            : ("DEFEAT",  Color(red: 1.00, green: 0.46, blue: 0.46),
+                          Color(red: 1.00, green: 0.46, blue: 0.46).opacity(0.12))
         VStack(spacing: 4) {
             Text(result.label)
                 .font(.system(size: 22, weight: .heavy, design: .rounded))
