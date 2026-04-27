@@ -42,6 +42,14 @@ final class WarRoomViewModel: ObservableObject {
     private var chainAlertFired = false
     private var chainPanicFired = false
     private var lastChainCountForAlerts: Int?
+    /// Wall-clock deadlines stamped at fetch time so ChainBar can
+    /// compute remaining = (deadline - now) per render and tick down
+    /// smoothly between the 15 s API polls. Min-of-(prev, new) when
+    /// the chain count is unchanged so a stale Torn cache returning a
+    /// higher timeout can't bump the displayed countdown back up.
+    @Published private(set) var chainTimeoutDeadlineMs: Int64 = 0
+    @Published private(set) var chainCooldownDeadlineMs: Int64 = 0
+    private var lastChainCountForDeadline: Int?
 
     init() { }
 
@@ -123,7 +131,35 @@ final class WarRoomViewModel: ObservableObject {
         travelInfo = await WarboardAPI.fetchTravelInfo(
             baseUrl: prefs.baseUrl, jwt: a.token, warId: merged.warId
         )
+        updateChainDeadlines(merged: merged)
         evaluateChainAlerts(prefs: prefs)
+    }
+
+    /// Convert the freshly-fetched chain timeout/cooldown seconds into
+    /// absolute wall-clock deadlines. ChainBar then derives the live
+    /// countdown each render via (deadline - now). Same min-of-(prev,
+    /// new) trick as the menu-bar ticker so a stale Torn cache can't
+    /// bump the timer back up.
+    private func updateChainDeadlines(merged: WarSnapshot) {
+        let chain = poll?.chainCurrent ?? merged.chainCurrent ?? 0
+        let toSec = (poll?.chainTimeout  ?? merged.chainTimeout)  ?? 0
+        let cdSec = (poll?.chainCooldown ?? merged.chainCooldown) ?? 0
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        let incomingTo = toSec > 0 ? now + toSec * 1000 : 0
+        let incomingCd = cdSec > 0 ? now + cdSec * 1000 : 0
+        let countChanged = lastChainCountForDeadline != chain
+
+        if incomingTo == 0 || countChanged || chainTimeoutDeadlineMs == 0 {
+            chainTimeoutDeadlineMs = incomingTo
+        } else {
+            chainTimeoutDeadlineMs = min(chainTimeoutDeadlineMs, incomingTo)
+        }
+        if incomingCd == 0 || countChanged || chainCooldownDeadlineMs == 0 {
+            chainCooldownDeadlineMs = incomingCd
+        } else {
+            chainCooldownDeadlineMs = min(chainCooldownDeadlineMs, incomingCd)
+        }
+        lastChainCountForDeadline = chain
     }
 
     /// Mirrors the userscript's chain alert thresholds (60 s warning,

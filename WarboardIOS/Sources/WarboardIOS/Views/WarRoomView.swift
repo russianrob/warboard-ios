@@ -37,6 +37,8 @@ struct WarRoomView: View {
                 switch subTab {
                 case .targets:
                     WarBody(war: war, poll: vm.poll, nowMs: nowMs,
+                            chainTimeoutDeadlineMs: vm.chainTimeoutDeadlineMs,
+                            chainCooldownDeadlineMs: vm.chainCooldownDeadlineMs,
                             enemyStats: vm.enemyStats,
                             travelInfo: vm.travelInfo,
                             onCall:   { target in Task { await vm.call(target) } },
@@ -111,6 +113,8 @@ private struct WarBody: View {
     let war: WarSnapshot
     let poll: WarPoll?
     let nowMs: Int64
+    let chainTimeoutDeadlineMs: Int64
+    let chainCooldownDeadlineMs: Int64
     let enemyStats: [String: Int64]
     let travelInfo: [String: TravelInfo]
     let onCall: (EnemyTarget) -> Void
@@ -118,7 +122,9 @@ private struct WarBody: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HeaderCard(war: war, poll: poll, nowMs: nowMs)
+            HeaderCard(war: war, poll: poll, nowMs: nowMs,
+                       chainTimeoutDeadlineMs: chainTimeoutDeadlineMs,
+                       chainCooldownDeadlineMs: chainCooldownDeadlineMs)
                 .padding(12)
             Divider()
             TargetList(war: war, nowMs: nowMs,
@@ -132,6 +138,8 @@ private struct HeaderCard: View {
     let war: WarSnapshot
     let poll: WarPoll?
     let nowMs: Int64
+    let chainTimeoutDeadlineMs: Int64
+    let chainCooldownDeadlineMs: Int64
 
     var body: some View {
         let myScore    = poll?.myScore    ?? war.myScore
@@ -159,7 +167,9 @@ private struct HeaderCard: View {
                 }
             }
             WarTimerRow(war: war, poll: poll, nowMs: nowMs)
-            ChainBar(war: war, poll: poll, nowMs: nowMs)
+            ChainBar(war: war, poll: poll, nowMs: nowMs,
+                     timeoutDeadlineMs: chainTimeoutDeadlineMs,
+                     cooldownDeadlineMs: chainCooldownDeadlineMs)
         }
         .padding(12)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
@@ -232,11 +242,15 @@ private struct ChainBar: View {
     let war: WarSnapshot
     let poll: WarPoll?
     let nowMs: Int64
+    /// Wall-clock deadlines stamped at fetch time by the VM. Drives
+    /// smooth per-second countdowns instead of static snapshot values.
+    let timeoutDeadlineMs: Int64
+    let cooldownDeadlineMs: Int64
 
     var body: some View {
         let chain = poll?.chainCurrent ?? war.chainCurrent ?? 0
-        let toSec = max(0, ((poll?.chainTimeout ?? war.chainTimeout) ?? 0))
-        let cdSec = max(0, ((poll?.chainCooldown ?? war.chainCooldown) ?? 0))
+        let toSec: Int64 = timeoutDeadlineMs  > 0 ? max(0, (timeoutDeadlineMs  - nowMs) / 1000) : 0
+        let cdSec: Int64 = cooldownDeadlineMs > 0 ? max(0, (cooldownDeadlineMs - nowMs) / 1000) : 0
         let nextBonus = nextChainMilestone(chain)
         let color: Color = {
             if chain == 0 || cdSec > 0 { return .secondary }
