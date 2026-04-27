@@ -29,6 +29,13 @@ let package = Package(
                 .copy("Resources/factionops.user.js"),
                 .copy("Resources/oc-spawn-assistance.user.js"),
                 .copy("Resources/gm-shim.js"),
+            ],
+            // swift-tools-version 6.0 defaults to Swift 6 strict
+            // concurrency, which trips on UNUserNotificationCenterDelegate
+            // conformance and a few WKWebView call sites. Stay on
+            // Swift 5 mode until those are addressed properly.
+            swiftSettings: [
+                .swiftLanguageMode(.v5)
             ]
         ),
     ]
