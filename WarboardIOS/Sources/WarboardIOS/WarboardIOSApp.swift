@@ -9,12 +9,26 @@ import UserNotifications
 @main
 struct WarboardIOSApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var prefs = PrefsStore()
+    @StateObject private var prefs: PrefsStore
+    @StateObject private var chainTicker: ChainTickerViewModel
+
+    init() {
+        let p = PrefsStore()
+        _prefs = StateObject(wrappedValue: p)
+        _chainTicker = StateObject(wrappedValue: ChainTickerViewModel(prefs: p))
+    }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(prefs)
+                .task {
+                    // Always-on chain poller — feeds the Live Activity
+                    // even when no war is active, so users see the
+                    // chain countdown in the Dynamic Island anytime
+                    // the faction is mid-chain.
+                    chainTicker.start()
+                }
         }
     }
 }

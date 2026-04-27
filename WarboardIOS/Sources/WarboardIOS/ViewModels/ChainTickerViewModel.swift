@@ -39,10 +39,26 @@ final class ChainTickerViewModel: ObservableObject {
     func stop() { task?.cancel(); task = nil }
 
     private func tick() async {
+        // Anchor on request-start time, not response-end — keeps the
+        // Live Activity's countdown in sync with Torn's actual chain
+        // timer (otherwise we run ~1-2 s ahead due to network RTT).
+        let requestStart = Int64(Date().timeIntervalSince1970 * 1000)
         guard !prefs.apiKey.isEmpty,
               let chain = await TornAPI.fetchFactionChain(apiKey: prefs.apiKey) else {
             inActiveWar = false; chainCurrent = 0
             timeoutDeadlineMs = 0; cooldownDeadlineMs = 0
+            // Make sure we tear down any active Live Activity if the
+            // chain went away (key cleared, network down, etc.).
+            ChainLiveActivityController.shared.sync(
+                warId: "",
+                enemyName: "",
+                chain: 0,
+                timeoutDeadlineMs: 0,
+                cooldownDeadlineMs: 0,
+                myScore: 0,
+                enemyScore: 0,
+                warEnded: true
+            )
             return
         }
         // chain.max == 0 means "no current chain bonus tier" — Torn
@@ -54,9 +70,8 @@ final class ChainTickerViewModel: ObservableObject {
         chainCurrent = chain.current
         nextMilestone = nextChainMilestone(chain.current)
 
-        let now = Int64(Date().timeIntervalSince1970 * 1000)
-        let incomingTimeoutDl  = chain.timeout  > 0 ? now + chain.timeout  * 1000 : 0
-        let incomingCooldownDl = chain.cooldown > 0 ? now + chain.cooldown * 1000 : 0
+        let incomingTimeoutDl  = chain.timeout  > 0 ? requestStart + chain.timeout  * 1000 : 0
+        let incomingCooldownDl = chain.cooldown > 0 ? requestStart + chain.cooldown * 1000 : 0
 
         // Same min-of-(prev, new) guard the Android VM uses. Reset
         // when count changes — a fresh hit legitimately bumps the timer.
@@ -75,5 +90,21 @@ final class ChainTickerViewModel: ObservableObject {
             cooldownDeadlineMs = min(cooldownDeadlineMs, incomingCooldownDl)
         }
         lastChainCount = chain.current
+
+        // Drive the Live Activity from here too — so the chain bar
+        // appears in the Dynamic Island even outside an active war.
+        // (Inside a war, WarRoomViewModel also calls sync with richer
+        // data; the controller dedupes by warId, so the latest writer
+        // wins per tick.)
+        ChainLiveActivityController.shared.sync(
+            warId: "chain-only",       // sentinel — no war context here
+            enemyName: "",
+            chain: chain.current,
+            timeoutDeadlineMs: timeoutDeadlineMs,
+            cooldownDeadlineMs: cooldownDeadlineMs,
+            myScore: 0,
+            enemyScore: 0,
+            warEnded: false
+        )
     }
 }
