@@ -3,6 +3,10 @@ import SwiftUI
 struct DashboardView: View {
     @EnvironmentObject private var prefs: PrefsStore
     @StateObject private var vm = DashboardViewModel()
+    /// Per-second tick so the bar / cooldown / travel countdowns
+    /// decrement smoothly between 30 s API polls.
+    @State private var nowMs: Int64 = Int64(Date().timeIntervalSince1970 * 1000)
+    private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ZStack {
@@ -14,7 +18,7 @@ struct DashboardView: View {
             case .error(let msg):
                 MessageView(icon: "exclamationmark.triangle.fill", text: msg)
             case .ready(let snap):
-                ScrollView { DashboardBody(snap: snap).padding(16) }
+                ScrollView { DashboardBody(snap: snap, nowMs: nowMs).padding(16) }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -22,11 +26,13 @@ struct DashboardView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button(action: { vm.refresh() }) { Image(systemName: "arrow.clockwise") }
-                    
             }
         }
         .onAppear { vm.bind(prefs: prefs); vm.start() }
         .onDisappear { vm.stop() }
+        .onReceive(ticker) { _ in
+            nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        }
     }
 }
 
@@ -43,40 +49,46 @@ private struct MessageView: View {
 
 private struct DashboardBody: View {
     let snap: TornAPI.DashboardSnapshot
+    let nowMs: Int64
+
+    /// Seconds elapsed since the snapshot was fetched. Used to age all
+    /// the snap.* countdowns so they tick smoothly between polls.
+    private var elapsed: Int {
+        max(0, Int((nowMs - Int64(snap.fetchedAt.timeIntervalSince1970 * 1000)) / 1000))
+    }
+    private func live(_ seconds: Int) -> Int { max(0, seconds - elapsed) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("\(snap.playerName)\(snap.factionName.map { " · \($0)" } ?? "")")
                 .font(.headline).foregroundStyle(.secondary)
 
-            // Status banner — only when not Okay (hospital, jail, travel,
-            // federal, abroad). Coloured by state.
             if snap.statusState.lowercased() != "okay" && !snap.statusState.isEmpty {
-                StatusBanner(snap: snap)
+                StatusBanner(snap: snap, secondsLeft: live(snap.statusSecondsLeft))
             }
 
-            // Bars
-            BarRow(label: "Energy",  bar: snap.energy, color: Color(red: 0.13, green: 0.83, blue: 0.94))
-            BarRow(label: "Nerve",   bar: snap.nerve,  color: .red)
-            BarRow(label: "Happy",   bar: snap.happy,  color: .yellow)
-            BarRow(label: "Life",    bar: snap.life,   color: .green)
+            BarRow(label: "Energy",  bar: snap.energy, color: Color(red: 0.13, green: 0.83, blue: 0.94), elapsed: elapsed)
+            BarRow(label: "Nerve",   bar: snap.nerve,  color: .red,    elapsed: elapsed)
+            BarRow(label: "Happy",   bar: snap.happy,  color: .yellow, elapsed: elapsed)
+            BarRow(label: "Life",    bar: snap.life,   color: .green,  elapsed: elapsed)
 
-            // Cooldowns — only render when active.
-            if snap.drugSeconds > 0 || snap.medicalSeconds > 0 || snap.boosterSeconds > 0 {
+            let drug    = live(snap.drugSeconds)
+            let medical = live(snap.medicalSeconds)
+            let booster = live(snap.boosterSeconds)
+            if drug > 0 || medical > 0 || booster > 0 {
                 Divider().padding(.vertical, 4)
-                Text("Cooldowns")
-                    .font(.caption.bold()).foregroundStyle(.secondary)
-                if snap.drugSeconds > 0    { CooldownChip(label: "Drug",    seconds: snap.drugSeconds,    tint: .purple) }
-                if snap.medicalSeconds > 0 { CooldownChip(label: "Medical", seconds: snap.medicalSeconds, tint: .red) }
-                if snap.boosterSeconds > 0 { CooldownChip(label: "Booster", seconds: snap.boosterSeconds, tint: .green) }
+                Text("Cooldowns").font(.caption.bold()).foregroundStyle(.secondary)
+                if drug > 0    { CooldownChip(label: "Drug",    seconds: drug,    tint: .purple) }
+                if medical > 0 { CooldownChip(label: "Medical", seconds: medical, tint: .red) }
+                if booster > 0 { CooldownChip(label: "Booster", seconds: booster, tint: .green) }
             }
 
             if let dest = snap.travelDestination {
+                let leftSec = live(snap.travelSecondsLeft)
                 Divider().padding(.vertical, 4)
                 HStack {
                     Image(systemName: "airplane").foregroundColor(.cyan)
-                    Text("Flying to \(dest)" +
-                         (snap.travelSecondsLeft > 0 ? " — lands in \(formatDur(snap.travelSecondsLeft))" : ""))
+                    Text("Flying to \(dest)" + (leftSec > 0 ? " — lands in \(formatDur(leftSec))" : ""))
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(.cyan)
                 }
@@ -91,9 +103,18 @@ private struct BarRow: View {
     let label: String
     let bar: TornAPI.Bar
     let color: Color
+    /// Seconds elapsed since the snapshot was taken.
+    let elapsed: Int
 
     var body: some View {
+        // Live current = snap.current + (elapsed / interval) ticks,
+        // capped at maximum. We don't have the interval per-bar in the
+        // snapshot, so just decrement fulltime and let the API refresh
+        // overwrite the current value every 30 s. Visually the
+        // "Full in" line counts down smoothly which is what users
+        // notice; the numeric current updates in chunks.
         let pct = bar.maximum > 0 ? Double(bar.current) / Double(bar.maximum) : 0
+        let liveFulltime = max(0, bar.fulltime - elapsed)
         VStack(spacing: 4) {
             HStack {
                 Text(label).font(.subheadline.weight(.medium))
@@ -102,11 +123,11 @@ private struct BarRow: View {
                     .foregroundStyle(.secondary)
             }
             ProgressView(value: pct).tint(color)
-            if bar.fulltime > 0 && bar.current < bar.maximum {
+            if liveFulltime > 0 && bar.current < bar.maximum {
                 HStack {
                     Spacer()
-                    Text("Full in \(formatDur(bar.fulltime))")
-                        .font(.caption2).foregroundStyle(.secondary)
+                    Text("Full in \(formatDur(liveFulltime))")
+                        .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
                 }
             }
         }
@@ -119,7 +140,7 @@ private struct CooldownChip: View {
         HStack {
             Image(systemName: "clock.fill").foregroundColor(tint)
             Text("\(label): \(formatDur(seconds))")
-                .font(.subheadline)
+                .font(.subheadline.monospacedDigit())
             Spacer()
         }
         .padding(.horizontal, 10).padding(.vertical, 6)
@@ -129,6 +150,7 @@ private struct CooldownChip: View {
 
 private struct StatusBanner: View {
     let snap: TornAPI.DashboardSnapshot
+    let secondsLeft: Int
     var body: some View {
         let color: Color = {
             switch snap.statusState.lowercased() {
@@ -148,8 +170,8 @@ private struct StatusBanner: View {
                 }
             }
             Spacer()
-            if snap.statusSecondsLeft > 0 {
-                Text(formatDur(snap.statusSecondsLeft))
+            if secondsLeft > 0 {
+                Text(formatDur(secondsLeft))
                     .font(.subheadline.bold().monospacedDigit())
                     .foregroundColor(color)
             }
