@@ -16,6 +16,7 @@ struct WarRoomView: View {
     @State private var subTab: WarSubTab = .targets
     @State private var showShout = false
     @State private var shoutText = ""
+    @State private var showPostWar = false
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -42,7 +43,11 @@ struct WarRoomView: View {
                             enemyStats: vm.enemyStats,
                             travelInfo: vm.travelInfo,
                             onCall:   { target in Task { await vm.call(target) } },
-                            onUncall: { target in Task { await vm.uncall(target) } })
+                            onUncall: { target in Task { await vm.uncall(target) } },
+                            onShowReport: {
+                                showPostWar = true
+                                if vm.postWarReport == nil { vm.loadPostWarReport() }
+                            })
                 case .report:
                     ReportTab(report: vm.scoutReport, loading: vm.scoutLoading,
                               onLoad: { vm.loadScoutReport() })
@@ -72,6 +77,26 @@ struct WarRoomView: View {
                 }
                 showShout = false
             }, onCancel: { showShout = false })
+        }
+        .sheet(isPresented: $showPostWar) {
+            if let report = vm.postWarReport {
+                PostWarReportView(report: report)
+            } else if vm.postWarLoading {
+                VStack(spacing: 12) {
+                    ProgressView().controlSize(.large)
+                    Text("Loading post-war report…").foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                VStack(spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 40)).foregroundStyle(.orange)
+                    Text(vm.postWarError ?? "Couldn't load report.").foregroundStyle(.secondary)
+                    Button("Retry") { vm.loadPostWarReport() }
+                        .buttonStyle(.borderedProminent)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
         .alert(item: Binding(
             get: { vm.shoutResult.map { IdString(value: $0) } },
@@ -119,6 +144,7 @@ private struct WarBody: View {
     let travelInfo: [String: TravelInfo]
     let onCall: (EnemyTarget) -> Void
     let onUncall: (EnemyTarget) -> Void
+    let onShowReport: () -> Void
 
     var body: some View {
         let warEnded = poll?.warEnded == true
@@ -128,7 +154,7 @@ private struct WarBody: View {
                        chainCooldownDeadlineMs: chainCooldownDeadlineMs)
                 .padding(12)
             if warEnded {
-                WarEndedBanner(war: war, poll: poll)
+                WarEndedBanner(war: war, poll: poll, onShowReport: onShowReport)
             }
             Divider()
             TargetList(war: war, nowMs: nowMs,
@@ -146,20 +172,18 @@ private struct WarBody: View {
 private struct WarEndedBanner: View {
     let war: WarSnapshot
     let poll: WarPoll?
+    let onShowReport: () -> Void
 
     var body: some View {
         let myScore    = poll?.myScore    ?? war.myScore
         let enemyScore = poll?.enemyScore ?? war.enemyScore
-        // Torn ranked wars always have a winner — no draw case to
-        // worry about. Tie-on-score (transient between polls) just
-        // falls through to DEFEAT, which the next tick corrects.
         let isVictory = myScore > enemyScore
         let result: (label: String, color: Color, bg: Color) = isVictory
             ? ("VICTORY", Color(red: 0.00, green: 0.72, blue: 0.58),
                           Color(red: 0.00, green: 0.72, blue: 0.58).opacity(0.12))
             : ("DEFEAT",  Color(red: 1.00, green: 0.46, blue: 0.46),
                           Color(red: 1.00, green: 0.46, blue: 0.46).opacity(0.12))
-        VStack(spacing: 4) {
+        VStack(spacing: 6) {
             Text(result.label)
                 .font(.system(size: 22, weight: .heavy, design: .rounded))
                 .tracking(2)
@@ -167,9 +191,16 @@ private struct WarEndedBanner: View {
             Text("\(myScore) – \(enemyScore)")
                 .font(.subheadline.monospacedDigit())
                 .foregroundStyle(.secondary)
+            Button(action: onShowReport) {
+                Label("View Post-War Report", systemImage: "doc.text.magnifyingglass")
+                    .font(.caption.bold())
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(result.color)
+            .padding(.top, 4)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
+        .padding(.vertical, 14)
         .background(result.bg)
     }
 }

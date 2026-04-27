@@ -307,6 +307,155 @@ enum WarboardAPI {
         }
     }
 
+    /// POST /api/war/<warId>/post-war-report — full breakdown shown
+    /// after the war ends (mirrors the factionops userscript's
+    /// renderPostWarReport view).
+    static func fetchPostWarReport(baseUrl: String, jwt: String, warId: String) async -> PostWarReport? {
+        guard let encoded = warId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: baseUrl.trimmedSlash + "/api/war/\(encoded)/post-war-report") else { return nil }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        req.httpBody = "{}".data(using: .utf8)
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else { return nil }
+            let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+            guard let r = root["report"] as? [String: Any] else { return nil }
+            return parsePostWarReport(r)
+        } catch {
+            return nil
+        }
+    }
+
+    private static func parsePostWarReport(_ r: [String: Any]) -> PostWarReport {
+        func dbl(_ v: Any?) -> Double {
+            if let d = v as? Double { return d }
+            if let i = v as? Int { return Double(i) }
+            if let s = v as? String, let d = Double(s) { return d }
+            return 0
+        }
+        func optDbl(_ v: Any?) -> Double? {
+            if v == nil { return nil }
+            return dbl(v)
+        }
+        func int(_ v: Any?) -> Int { (v as? Int) ?? Int(dbl(v)) }
+        func str(_ v: Any?) -> String { (v as? String) ?? "" }
+
+        var summary: PostWarReport.WarSummary?
+        if let ws = r["warSummary"] as? [String: Any] {
+            summary = .init(
+                result: str(ws["result"]),
+                ourScore: int(ws["ourScore"]),
+                enemyScore: int(ws["enemyScore"]),
+                ourName: str(ws["ourName"]),
+                enemyName: str(ws["enemyName"]),
+                totalOurHits: int(ws["totalOurHits"]),
+                totalEnemyHits: int(ws["totalEnemyHits"]),
+                totalRespect: dbl(ws["totalRespect"]),
+                durationFormatted: ws["durationFormatted"] as? String
+            )
+        }
+
+        var perf: PostWarReport.FactionPerformance?
+        if let fp = r["factionPerformance"] as? [String: Any] {
+            perf = .init(
+                participationCount: int(fp["participationCount"]),
+                totalRoster: int(fp["totalRoster"]),
+                participationRate: int(fp["participationRate"]),
+                avgHitsPerMember: dbl(fp["avgHitsPerMember"]),
+                avgRespectPerHit: dbl(fp["avgRespectPerHit"]),
+                avgFairFight: optDbl(fp["avgFairFight"]),
+                efficiencyRating: int(fp["efficiencyRating"])
+            )
+        }
+
+        var energy: PostWarReport.EnergyEfficiency?
+        if let ee = r["energyEfficiency"] as? [String: Any] {
+            let members = (ee["members"] as? [[String: Any]]) ?? []
+            let below = members.filter { ($0["isBelowThreshold"] as? Bool) == true }.count
+            energy = .init(
+                totalEstimatedEnergy: int(ee["totalEstimatedEnergy"]),
+                totalWastedEnergy: int(ee["totalWastedEnergy"]),
+                factionAvgRespectPerHit: dbl(ee["factionAvgRespectPerHit"]),
+                efficiencyPct: int(ee["efficiencyPct"]),
+                belowThresholdCount: below
+            )
+        }
+
+        var positive: PostWarReport.PositiveHighlights?
+        if let ph = r["positiveHighlights"] as? [String: Any] {
+            let achievements = ((ph["achievements"] as? [[String: Any]]) ?? []).map {
+                PostWarReport.PositiveHighlights.Achievement(
+                    title: str($0["title"]),
+                    name: str($0["name"]),
+                    value: str($0["value"])
+                )
+            }
+            let topPerformers = ((ph["topPerformers"] as? [[String: Any]]) ?? []).map { m in
+                PostWarReport.PositiveHighlights.TopPerformer(
+                    name: str(m["name"]),
+                    level: int(m["level"]),
+                    attacks: int(m["attacks"]),
+                    assists: m["assists"].flatMap { $0 as? Int },
+                    respect: dbl(m["respect"]),
+                    respectPerHit: dbl(m["respectPerHit"]),
+                    score: int(m["score"])
+                )
+            }
+            positive = .init(achievements: achievements, topPerformers: topPerformers)
+        }
+
+        var negative: PostWarReport.NegativeHighlights?
+        if let nh = r["negativeHighlights"] as? [String: Any] {
+            let areas = ((nh["areasToImprove"] as? [[String: Any]]) ?? []).map { m in
+                PostWarReport.NegativeHighlights.Underperformer(
+                    name: str(m["name"]),
+                    level: int(m["level"]),
+                    attacks: int(m["attacks"]),
+                    respect: dbl(m["respect"]),
+                    respectPerHit: optDbl(m["respectPerHit"]),
+                    score: int(m["score"]),
+                    issue: str(m["issue"])
+                )
+            }
+            negative = .init(areasToImprove: areas)
+        }
+
+        let recs = ((r["recommendations"] as? [[String: Any]]) ?? []).map {
+            PostWarReport.Recommendation(
+                category: str($0["category"]),
+                priority: ($0["priority"] as? String) ?? "medium",
+                text: str($0["text"])
+            )
+        }
+
+        let table = ((r["memberTable"] as? [[String: Any]]) ?? []).map { m in
+            PostWarReport.MemberRow(
+                name: str(m["name"]),
+                level: int(m["level"]),
+                attacks: int(m["attacks"]),
+                respect: dbl(m["respect"]),
+                respectPerHit: optDbl(m["respectPerHit"]),
+                timesAttacked: int(m["timesAttacked"]),
+                respectBled: dbl(m["respectBled"]),
+                netScore: dbl(m["netScore"]),
+                efficiencyPct: int(m["efficiencyPct"])
+            )
+        }
+
+        return PostWarReport(
+            warSummary: summary,
+            factionPerformance: perf,
+            energyEfficiency: energy,
+            positiveHighlights: positive,
+            negativeHighlights: negative,
+            recommendations: recs,
+            memberTable: table
+        )
+    }
+
     /// GET /api/heatmap?factionId=<fid> — day-of-week × hour-of-day
     /// activity matrix. Same endpoint the Android client uses.
     static func fetchHeatmap(baseUrl: String, jwt: String, factionId: String) async -> [Int: [Int: HeatmapCell]] {

@@ -16,6 +16,11 @@ final class WarRoomViewModel: ObservableObject {
     /// Scout report — loaded on demand when the Report sub-tab opens.
     @Published private(set) var scoutReport: ScoutReport?
     @Published private(set) var scoutLoading = false
+    /// Post-war report — loaded on demand when the user opens the
+    /// modal from the war-ended banner.
+    @Published private(set) var postWarReport: PostWarReport?
+    @Published private(set) var postWarLoading = false
+    @Published private(set) var postWarError: String?
     /// Both faction heatmaps. Refreshed each war-poll tick.
     @Published private(set) var ourHeatmap:  [Int: [Int: HeatmapCell]] = [:]
     @Published private(set) var theirHeatmap: [Int: [Int: HeatmapCell]] = [:]
@@ -219,6 +224,25 @@ final class WarRoomViewModel: ObservableObject {
             switch result {
             case .ok:                shoutResult = "Shout sent"
             case .error(let msg):    shoutResult = "Shout failed: \(msg)"
+            }
+        }
+    }
+
+    /// Lazy post-war-report fetch — fired when the user taps the
+    /// "View Report" button on the war-ended banner.
+    func loadPostWarReport() {
+        Task {
+            guard let prefs = prefs, let auth = auth,
+                  case .active(let war) = state,
+                  let a = await auth.ensureAuth() else { return }
+            postWarLoading = true
+            postWarError = nil
+            postWarReport = await WarboardAPI.fetchPostWarReport(
+                baseUrl: prefs.baseUrl, jwt: a.token, warId: war.warId
+            )
+            postWarLoading = false
+            if postWarReport == nil {
+                postWarError = "Couldn't load post-war report."
             }
         }
     }
