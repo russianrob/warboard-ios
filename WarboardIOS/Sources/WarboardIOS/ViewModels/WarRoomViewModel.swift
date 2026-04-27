@@ -100,10 +100,20 @@ final class WarRoomViewModel: ObservableObject {
         await tick()
     }
 
+    /// Anchor for chain-deadline math — set right BEFORE the network
+    /// call so we can subtract round-trip lag when stamping deadlines.
+    /// `now + chainTimeout * 1000` (post-RTT) drifts ~1-2 s ahead of
+    /// what Torn shows because the chainTimeout value Torn returned
+    /// was computed when our request landed there, not when we got
+    /// the response back. Using the request-start time as the anchor
+    /// effectively rewinds the deadline by approximately the RTT.
+    private var lastTickRequestStartMs: Int64 = 0
+
     private func tick() async {
         guard let prefs = prefs, let auth = auth else { return }
         if prefs.apiKey.isEmpty { state = .noKey; return }
         guard let a = await auth.ensureAuth() else { state = .noKey; return }
+        lastTickRequestStartMs = Int64(Date().timeIntervalSince1970 * 1000)
         let wars = await WarboardAPI.fetchWars(
             baseUrl: prefs.baseUrl, factionId: a.factionId, jwt: a.token
         )
@@ -170,9 +180,16 @@ final class WarRoomViewModel: ObservableObject {
         let chain = poll?.chainCurrent ?? merged.chainCurrent ?? 0
         let toSec = (poll?.chainTimeout  ?? merged.chainTimeout)  ?? 0
         let cdSec = (poll?.chainCooldown ?? merged.chainCooldown) ?? 0
-        let now = Int64(Date().timeIntervalSince1970 * 1000)
-        let incomingTo = toSec > 0 ? now + toSec * 1000 : 0
-        let incomingCd = cdSec > 0 ? now + cdSec * 1000 : 0
+        // Anchor on when we SENT the request (lastTickRequestStartMs)
+        // rather than now (which is post-RTT). This subtracts roughly
+        // the network round-trip from the stamped deadline so the
+        // displayed countdown stays in sync with Torn's instead of
+        // running 1-2 s ahead.
+        let anchor = lastTickRequestStartMs > 0
+            ? lastTickRequestStartMs
+            : Int64(Date().timeIntervalSince1970 * 1000)
+        let incomingTo = toSec > 0 ? anchor + toSec * 1000 : 0
+        let incomingCd = cdSec > 0 ? anchor + cdSec * 1000 : 0
         let countChanged = lastChainCountForDeadline != chain
 
         if incomingTo == 0 || countChanged || chainTimeoutDeadlineMs == 0 {
