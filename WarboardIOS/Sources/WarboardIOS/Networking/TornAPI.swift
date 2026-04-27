@@ -62,8 +62,10 @@ enum TornAPI {
         } catch { return nil }
     }
 
-    /// `/v2/user?selections=basic,bars,cooldowns,profile,travel` →
-    /// the everything-the-Status-tab-needs payload.
+    /// `/user/?selections=basic,bars,cooldowns,profile,travel` (v1).
+    /// v1 returns each bar at root level (energy/nerve/happy/life as
+    /// top-level keys); the parser pulls them from there. The v2 user
+    /// endpoint has a different shape we don't currently support.
     static func fetchDashboard(apiKey: String) async -> DashboardSnapshot? {
         guard !apiKey.isEmpty,
               let url = URL(string: "\(base)/user/?selections=\(dashboardSelections)&key=\(apiKey)")
@@ -92,7 +94,10 @@ enum TornAPI {
     }
 
     private static func parseDashboard(_ root: [String: Any]) -> DashboardSnapshot {
-        let bars = root["bars"] as? [String: Any] ?? [:]
+        // v1 puts each bar at root level — energy / nerve / happy / life
+        // are top-level keys, NOT under a "bars" wrapper. Earlier code
+        // looked under root["bars"] which is always nil and produced
+        // the 0/100 placeholder rendering.
         let cd = root["cooldowns"] as? [String: Any] ?? [:]
         let travel = root["travel"] as? [String: Any] ?? [:]
         let status = root["status"] as? [String: Any] ?? [:]
@@ -103,10 +108,10 @@ enum TornAPI {
         return DashboardSnapshot(
             playerName: (root["name"] as? String) ?? "",
             factionName: (root["faction"] as? [String: Any])?["faction_name"] as? String,
-            energy: bar(bars["energy"]),
-            nerve:  bar(bars["nerve"]),
-            happy:  bar(bars["happy"]),
-            life:   bar(bars["life"]),
+            energy: bar(root["energy"]),
+            nerve:  bar(root["nerve"]),
+            happy:  bar(root["happy"]),
+            life:   bar(root["life"]),
             drugSeconds:    (cd["drug"]    as? Int) ?? 0,
             medicalSeconds: (cd["medical"] as? Int) ?? 0,
             boosterSeconds: (cd["booster"] as? Int) ?? 0,
