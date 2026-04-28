@@ -71,7 +71,15 @@ private struct DashboardBody: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("\(snap.playerName)\(snap.factionName.map { " · \($0)" } ?? "")")
+            // Header line — name · faction · role. Role only shown
+            // when the API returned one (Limited keys may not).
+            let header: String = {
+                var parts = [snap.playerName]
+                if let f = snap.factionName, !f.isEmpty { parts.append(f) }
+                if let r = snap.factionPosition, !r.isEmpty { parts.append(r) }
+                return parts.joined(separator: " · ")
+            }()
+            Text(header)
                 .font(.headline).foregroundStyle(.secondary)
 
             if snap.statusState.lowercased() != "okay" && !snap.statusState.isEmpty {

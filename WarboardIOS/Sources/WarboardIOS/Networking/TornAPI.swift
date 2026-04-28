@@ -16,6 +16,10 @@ enum TornAPI {
     struct DashboardSnapshot: Equatable {
         let playerName: String
         let factionName: String?
+        /// Position role inside the faction — "Leader", "Co-leader",
+        /// "Banker", "Member", or any custom role the faction defines.
+        /// Pulled from /v2/user?selections=profile.faction.position.
+        let factionPosition: String?
         let energy: Bar
         let nerve: Bar
         let happy: Bar
@@ -76,7 +80,7 @@ enum TornAPI {
             if let err = root["error"] as? [String: Any] {
                 let msg = (err["error"] as? String) ?? "Torn API error"
                 return DashboardSnapshot(
-                    playerName: "", factionName: nil,
+                    playerName: "", factionName: nil, factionPosition: nil,
                     energy: Bar(current: 0, maximum: 100, fulltime: 0),
                     nerve:  Bar(current: 0, maximum: 100, fulltime: 0),
                     happy:  Bar(current: 0, maximum: 100, fulltime: 0),
@@ -105,9 +109,11 @@ enum TornAPI {
         let isTraveling = (travel["time_left"] as? Int).map { $0 > 0 } ?? false
         let dest = travel["destination"] as? String
         let timeLeft = (travel["time_left"] as? Int) ?? 0
+        let faction = root["faction"] as? [String: Any]
         return DashboardSnapshot(
             playerName: (root["name"] as? String) ?? "",
-            factionName: (root["faction"] as? [String: Any])?["faction_name"] as? String,
+            factionName: faction?["faction_name"] as? String,
+            factionPosition: faction?["position"] as? String,
             energy: bar(root["energy"]),
             nerve:  bar(root["nerve"]),
             happy:  bar(root["happy"]),
