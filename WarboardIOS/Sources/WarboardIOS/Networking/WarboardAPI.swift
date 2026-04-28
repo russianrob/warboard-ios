@@ -399,6 +399,61 @@ enum WarboardAPI {
         let timestampMs: Int64
     }
 
+    struct FactionKeyStatus: Equatable {
+        let stored: Bool
+        let last4: String?
+    }
+
+    /// GET /api/faction-key/status — tells us whether a server-side
+    /// faction-wide key is on file (without leaking it). Used by the
+    /// Admin section to render "stored / not stored" + Remove button.
+    static func fetchFactionKeyStatus(baseUrl: String, jwt: String) async -> FactionKeyStatus? {
+        guard let url = URL(string: baseUrl.trimmedSlash + "/api/faction-key/status") else { return nil }
+        var req = URLRequest(url: url)
+        req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            guard (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+            let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+            return FactionKeyStatus(
+                stored: (root["stored"] as? Bool) ?? false,
+                last4: root["last4"] as? String
+            )
+        } catch { return nil }
+    }
+
+    /// POST /api/faction-key — save the faction-wide key. Server validates
+    /// it against Torn's `/user/?selections=basic` before storing, so an
+    /// invalid key surfaces as a 400 error.
+    static func setFactionApiKey(baseUrl: String, jwt: String, apiKey: String) async -> AdminResult {
+        guard let url = URL(string: baseUrl.trimmedSlash + "/api/faction-key") else { return .error("Bad URL") }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["apiKey": apiKey])
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            if (resp as? HTTPURLResponse)?.statusCode == 200 { return .ok }
+            let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            return .error((root?["error"] as? String) ?? "HTTP \((resp as? HTTPURLResponse)?.statusCode ?? 0)")
+        } catch { return .error(error.localizedDescription) }
+    }
+
+    /// POST /api/faction-key/remove — wipe the stored faction key.
+    static func removeFactionApiKey(baseUrl: String, jwt: String) async -> AdminResult {
+        guard let url = URL(string: baseUrl.trimmedSlash + "/api/faction-key/remove") else { return .error("Bad URL") }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            if (resp as? HTTPURLResponse)?.statusCode == 200 { return .ok }
+            let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            return .error((root?["error"] as? String) ?? "HTTP \((resp as? HTTPURLResponse)?.statusCode ?? 0)")
+        } catch { return .error(error.localizedDescription) }
+    }
+
     /// GET /api/admin/pm2-logs — owner-only (playerId 137558). Last 200
     /// lines of warboard-out / warboard-error with API keys masked.
     static func fetchPM2Logs(baseUrl: String, jwt: String) async -> PM2Logs? {

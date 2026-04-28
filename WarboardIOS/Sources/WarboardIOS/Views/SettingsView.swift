@@ -122,6 +122,39 @@ private struct AdminSection: View {
 
             Divider()
 
+            // ── Faction API key (server-side, shared) ──
+            Text("Faction API key").font(.subheadline.bold())
+            if admin.factionKeyStored {
+                HStack {
+                    Image(systemName: "checkmark.seal.fill").foregroundStyle(.green)
+                    Text("Stored on server" + (admin.factionKeyLast4.isEmpty ? "" : " · ••••\(admin.factionKeyLast4)"))
+                        .font(.caption)
+                    Spacer()
+                    Button(admin.savingFactionKey ? "Removing…" : "Remove") {
+                        Task { await admin.removeFactionKey(prefs: prefs) }
+                    }
+                    .disabled(admin.savingFactionKey)
+                    .foregroundStyle(.red)
+                    .font(.caption)
+                }
+            } else {
+                SecureField("Paste faction-wide API key", text: $admin.factionKeyField)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                HStack {
+                    Text("Used by warboard for server-side faction polling. Validated against Torn before storing.")
+                        .font(.caption2).foregroundStyle(.secondary)
+                    Spacer()
+                    Button(admin.savingFactionKey ? "Saving…" : "Save key") {
+                        Task { await admin.saveFactionKey(prefs: prefs) }
+                    }
+                    .disabled(admin.savingFactionKey)
+                    .buttonStyle(.bordered)
+                }
+            }
+
+            Divider()
+
             // ── Broadcast roles ──
             Text("Broadcast roles").font(.subheadline.bold())
             TextField("e.g. leader, co-leader, banker", text: $admin.rolesField)
@@ -219,10 +252,14 @@ final class AdminSettingsViewModel: ObservableObject {
     @Published var targetField: String = ""
     @Published var roles: [String] = []
     @Published var rolesField: String = ""
-    @Published var pm2Out: String = ""
-    @Published var pm2Err: String = ""
+    @Published var factionKeyField: String = ""
+    @Published var factionKeyStored: Bool = false
+    @Published var factionKeyLast4: String = ""
     @Published var savingTarget = false
     @Published var savingRoles = false
+    @Published var savingFactionKey = false
+    @Published var pm2Out: String = ""
+    @Published var pm2Err: String = ""
     @Published var loadingLogs = false
     @Published var status: String?
 
@@ -242,6 +279,45 @@ final class AdminSettingsViewModel: ObservableObject {
         let r = await WarboardAPI.fetchBroadcastRoles(baseUrl: prefs.baseUrl, jwt: a.token)
         roles = r
         rolesField = r.joined(separator: ", ")
+        if let s = await WarboardAPI.fetchFactionKeyStatus(baseUrl: prefs.baseUrl, jwt: a.token) {
+            factionKeyStored = s.stored
+            factionKeyLast4 = s.last4 ?? ""
+        }
+    }
+
+    func saveFactionKey(prefs: PrefsStore) async {
+        guard let a = prefs.cachedJwt() else { return }
+        let key = factionKeyField.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { status = "Paste a key first"; return }
+        savingFactionKey = true
+        let r = await WarboardAPI.setFactionApiKey(
+            baseUrl: prefs.baseUrl, jwt: a.token, apiKey: key
+        )
+        savingFactionKey = false
+        switch r {
+        case .ok:
+            factionKeyStored = true
+            factionKeyLast4 = String(key.suffix(4))
+            factionKeyField = ""
+            status = "Faction key saved"
+        case .error(let m):
+            status = "Error: \(m)"
+        }
+    }
+
+    func removeFactionKey(prefs: PrefsStore) async {
+        guard let a = prefs.cachedJwt() else { return }
+        savingFactionKey = true
+        let r = await WarboardAPI.removeFactionApiKey(baseUrl: prefs.baseUrl, jwt: a.token)
+        savingFactionKey = false
+        switch r {
+        case .ok:
+            factionKeyStored = false
+            factionKeyLast4 = ""
+            status = "Faction key removed"
+        case .error(let m):
+            status = "Error: \(m)"
+        }
     }
 
     func saveTarget(prefs: PrefsStore) async {
