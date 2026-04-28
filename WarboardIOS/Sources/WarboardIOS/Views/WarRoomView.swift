@@ -372,6 +372,8 @@ private struct TargetRow: View {
     let nowMs: Int64
     let onCall: (EnemyTarget) -> Void
     let onUncall: (EnemyTarget) -> Void
+    @EnvironmentObject private var prefs: PrefsStore
+    @State private var sheet: SafariSheet?
 
     var body: some View {
         HStack(spacing: 8) {
@@ -394,9 +396,7 @@ private struct TargetRow: View {
             }
             if target.status.lowercased() == "okay" {
                 Button("Attack") {
-                    if let url = URL(string: "https://www.torn.com/loader.php?sid=attack&user2ID=\(target.id)") {
-                        UIApplication.shared.open(url)
-                    }
+                    openLink("https://www.torn.com/loader.php?sid=attack&user2ID=\(target.id)")
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
@@ -406,9 +406,19 @@ private struct TargetRow: View {
         .padding(.vertical, 4)
         .contentShape(Rectangle())
         .onTapGesture {
-            if let url = URL(string: "https://www.torn.com/profiles.php?XID=\(target.id)") {
-                UIApplication.shared.open(url)
-            }
+            openLink("https://www.torn.com/profiles.php?XID=\(target.id)")
+        }
+        .sheet(item: $sheet) { $0 }
+    }
+
+    /// Routes through the in-app Safari sheet or the system browser
+    /// based on the user's `linkOpenInApp` pref.
+    private func openLink(_ urlString: String) {
+        guard let url = URL(string: urlString) else { return }
+        if prefs.linkOpenInApp {
+            sheet = url.asSafariSheet
+        } else {
+            UIApplication.shared.open(url)
         }
     }
 

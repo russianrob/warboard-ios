@@ -113,14 +113,15 @@ private struct VaultRow: View {
     let onClaim: () -> Void
     let onCancel: () -> Void
 
+    @EnvironmentObject private var prefs: PrefsStore
+    @State private var sheet: SafariSheet?
+
     var body: some View {
         let ageMin = max(0, Int((Date().timeIntervalSince1970 * 1000 - Double(request.createdAt)) / 60_000))
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Button(request.requesterName) {
-                    if let url = URL(string: "https://www.torn.com/profiles.php?XID=\(request.requesterId)") {
-                        UIApplication.shared.open(url)
-                    }
+                    openLink("https://www.torn.com/profiles.php?XID=\(request.requesterId)")
                 }
                 .buttonStyle(.plain)
                 .font(.subheadline.bold())
@@ -138,6 +139,13 @@ private struct VaultRow: View {
             Button("✕") { onCancel() }.buttonStyle(.bordered).controlSize(.small)
         }
         .padding(.vertical, 4)
+        .sheet(item: $sheet) { $0 }
+    }
+
+    private func openLink(_ urlString: String) {
+        guard let url = URL(string: urlString) else { return }
+        if prefs.linkOpenInApp { sheet = url.asSafariSheet }
+        else { UIApplication.shared.open(url) }
     }
 }
 
@@ -163,6 +171,8 @@ private struct MembersPanel: View {
 private struct MemberRow: View {
     let member: MemberBars
     let nowMs: Int64
+    @EnvironmentObject private var prefs: PrefsStore
+    @State private var sheet: SafariSheet?
 
     var body: some View {
         let ageMin = max(0, Int((nowMs - member.updatedAt) / 60_000))
@@ -170,8 +180,10 @@ private struct MemberRow: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Button(member.playerName) {
-                    if let url = URL(string: "https://www.torn.com/profiles.php?XID=\(member.playerId)") {
-                        UIApplication.shared.open(url)
+                    let urlString = "https://www.torn.com/profiles.php?XID=\(member.playerId)"
+                    if let url = URL(string: urlString) {
+                        if prefs.linkOpenInApp { sheet = url.asSafariSheet }
+                        else { UIApplication.shared.open(url) }
                     }
                 }
                 .buttonStyle(.plain)
@@ -200,6 +212,7 @@ private struct MemberRow: View {
             }
         }
         .padding(.vertical, 4)
+        .sheet(item: $sheet) { $0 }
     }
 }
 

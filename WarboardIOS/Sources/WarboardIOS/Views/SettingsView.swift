@@ -54,6 +54,14 @@ struct SettingsView: View {
                     .font(.caption2).foregroundStyle(.secondary)
             }
 
+            Section("Links") {
+                Toggle("Open Torn links in-app", isOn: $prefs.linkOpenInApp)
+                Text(prefs.linkOpenInApp
+                     ? "Attack / profile links open in an in-app Safari view. Tap ✕ in the corner to return."
+                     : "Attack / profile links hand off to your default browser or PDA app.")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+
             if let auth = admin.auth, auth.isAdmin {
                 AdminSection(admin: admin, prefs: prefs)
             }

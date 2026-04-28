@@ -16,6 +16,7 @@ final class PrefsStore: ObservableObject {
     private static let kNotifyChain = "warboard.notify.chain"
     private static let kNotifyVault = "warboard.notify.vault"
     private static let kMenuBarChain = "warboard.menubar.chain"
+    private static let kLinkOpenInApp = "warboard.linkOpenInApp"
 
     @Published var apiKey: String { didSet { defaults.set(apiKey, forKey: Self.kApiKey) } }
     @Published var baseUrl: String { didSet { defaults.set(baseUrl, forKey: Self.kBaseUrl) } }
@@ -25,6 +26,11 @@ final class PrefsStore: ObservableObject {
     @Published var notifyVault: Bool { didSet { defaults.set(notifyVault, forKey: Self.kNotifyVault) } }
     /// Whether the menu-bar status item shows the live chain count.
     @Published var menuBarChain: Bool { didSet { defaults.set(menuBarChain, forKey: Self.kMenuBarChain) } }
+    /// Open Torn links (attack / profile) inside an in-app Safari sheet
+    /// when true, hand off to the system browser / PDA when false. Default
+    /// ON so the user stays in the app — the Safari sheet's close button
+    /// drops them back instantly without a tab-switch round trip.
+    @Published var linkOpenInApp: Bool { didSet { defaults.set(linkOpenInApp, forKey: Self.kLinkOpenInApp) } }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -35,6 +41,7 @@ final class PrefsStore: ObservableObject {
         self.notifyChain = defaults.object(forKey: Self.kNotifyChain) as? Bool ?? true
         self.notifyVault = defaults.object(forKey: Self.kNotifyVault) as? Bool ?? true
         self.menuBarChain = defaults.object(forKey: Self.kMenuBarChain) as? Bool ?? true
+        self.linkOpenInApp = defaults.object(forKey: Self.kLinkOpenInApp) as? Bool ?? true
     }
 
     // JWT cache helpers — accessed by AuthRepository, not the UI.
