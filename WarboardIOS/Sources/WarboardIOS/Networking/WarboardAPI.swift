@@ -315,6 +315,77 @@ enum WarboardAPI {
         }
     }
 
+    // MARK: War chat
+
+    struct ChatMessage: Identifiable, Equatable {
+        let id: String
+        let ts: Int64
+        let playerId: String
+        let playerName: String
+        let factionPosition: String
+        let text: String
+    }
+
+    /// GET /api/chat/<warId> — last 100 messages for the war.
+    static func fetchChatHistory(baseUrl: String, jwt: String, warId: String) async -> [ChatMessage] {
+        guard let encoded = warId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+              let url = URL(string: baseUrl.trimmedSlash + "/api/chat/\(encoded)") else { return [] }
+        var req = URLRequest(url: url)
+        req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        do {
+            let (data, _) = try await URLSession.shared.data(for: req)
+            let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+            let arr = root["messages"] as? [[String: Any]] ?? []
+            return arr.compactMap(parseChatMessage)
+        } catch { return [] }
+    }
+
+    /// POST /api/chat/<warId> { text } — send a message. Server gates
+    /// on faction membership + per-player rate limit (5 msg / 5 s).
+    static func sendChatMessage(baseUrl: String, jwt: String, warId: String, text: String) async -> AdminResult {
+        guard let encoded = warId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+              let url = URL(string: baseUrl.trimmedSlash + "/api/chat/\(encoded)") else { return .error("Bad URL") }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["text": text])
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            if (resp as? HTTPURLResponse)?.statusCode == 200 { return .ok }
+            let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            return .error((root?["error"] as? String) ?? "HTTP \((resp as? HTTPURLResponse)?.statusCode ?? 0)")
+        } catch { return .error(error.localizedDescription) }
+    }
+
+    /// DELETE /api/chat/<warId>/<msgId> — admin-only delete.
+    static func deleteChatMessage(baseUrl: String, jwt: String, warId: String, msgId: String) async -> AdminResult {
+        guard let encWar = warId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+              let encMsg = msgId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+              let url = URL(string: baseUrl.trimmedSlash + "/api/chat/\(encWar)/\(encMsg)") else { return .error("Bad URL") }
+        var req = URLRequest(url: url)
+        req.httpMethod = "DELETE"
+        req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            if (resp as? HTTPURLResponse)?.statusCode == 200 { return .ok }
+            let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            return .error((root?["error"] as? String) ?? "HTTP \((resp as? HTTPURLResponse)?.statusCode ?? 0)")
+        } catch { return .error(error.localizedDescription) }
+    }
+
+    static func parseChatMessage(_ o: [String: Any]) -> ChatMessage? {
+        guard let id = o["id"] as? String, let text = o["text"] as? String else { return nil }
+        return ChatMessage(
+            id: id,
+            ts: (o["ts"] as? Int64) ?? Int64((o["ts"] as? Int) ?? 0),
+            playerId: (o["playerId"] as? String) ?? "",
+            playerName: (o["playerName"] as? String) ?? "?",
+            factionPosition: (o["factionPosition"] as? String) ?? "",
+            text: text
+        )
+    }
+
     // MARK: Admin — war target / broadcast roles / pm2 logs
 
     struct WarTarget: Equatable {

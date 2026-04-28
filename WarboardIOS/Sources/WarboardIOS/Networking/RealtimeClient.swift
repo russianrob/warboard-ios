@@ -90,6 +90,8 @@ final class RealtimeClient {
         s.on("target_uncalled")  { [weak self] data, _ in self?.publish(.targetUncalled(data.first as? [String: Any] ?? [:])) }
         s.on("member_bars")      { [weak self] data, _ in self?.publish(.memberBars(data.first as? [String: Any] ?? [:])) }
         s.on("global_toast")     { [weak self] data, _ in self?.publish(.globalToast(data.first as? [String: Any] ?? [:])) }
+        s.on("chat_message")     { [weak self] data, _ in self?.publish(.chatMessage(data.first as? [String: Any] ?? [:])) }
+        s.on("chat_deleted")     { [weak self] data, _ in self?.publish(.chatDeleted(data.first as? [String: Any] ?? [:])) }
 
         s.connect()
     }
@@ -145,5 +147,7 @@ final class RealtimeClient {
         case targetUncalled([String: Any])
         case memberBars([String: Any])
         case globalToast([String: Any])
+        case chatMessage([String: Any])
+        case chatDeleted([String: Any])
     }
 }

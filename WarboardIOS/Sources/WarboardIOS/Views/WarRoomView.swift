@@ -2,10 +2,15 @@ import SwiftUI
 import UIKit
 
 enum WarSubTab: String, CaseIterable, Identifiable {
-    case targets, report, heatmap
+    case targets, chat, report, heatmap
     var id: String { rawValue }
     var label: String {
-        switch self { case .targets: return "Targets"; case .report: return "Report"; case .heatmap: return "Heatmap" }
+        switch self {
+        case .targets: return "Targets"
+        case .chat:    return "Chat"
+        case .report:  return "Report"
+        case .heatmap: return "Heatmap"
+        }
     }
 }
 
@@ -46,6 +51,8 @@ struct WarRoomView: View {
                                 showPostWar = true
                                 if vm.postWarReport == nil { vm.loadPostWarReport() }
                             })
+                case .chat:
+                    ChatPanel(warId: war.warId)
                 case .report:
                     ReportTab(report: vm.scoutReport, loading: vm.scoutLoading,
                               onLoad: { vm.loadScoutReport() })
