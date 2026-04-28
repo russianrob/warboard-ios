@@ -42,6 +42,11 @@ enum TornAPI {
         let timeout: Int64        // seconds until break
         let cooldown: Int64       // seconds of post-break wait
         let modifier: Double      // respect multiplier at current count
+        /// Torn server-side wall-clock when the response was generated
+        /// (epoch seconds). Anchor deadlines on this — not requestStart —
+        /// to remove network RTT from the displayed countdown so the
+        /// chain timer matches Torn's in-game UI exactly.
+        let serverTimestamp: Int64
     }
 
     /// `/v2/faction?selections=chain` — direct Torn fetch with the
@@ -56,12 +61,19 @@ enum TornAPI {
             let (data, _) = try await URLSession.shared.data(from: url)
             let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
             guard let c = root["chain"] as? [String: Any] else { return nil }
+            // Torn v2 returns a top-level "timestamp" (epoch seconds)
+            // representing when the response was generated. Falling back
+            // to local wall-clock if it's missing keeps the previous
+            // behaviour intact for any odd response shape.
+            let serverTs = (root["timestamp"] as? Int64)
+                ?? Int64((root["timestamp"] as? Int) ?? Int(Date().timeIntervalSince1970))
             return FactionChain(
                 current:  (c["current"]  as? Int) ?? 0,
                 max:      (c["max"]      as? Int) ?? 0,
                 timeout:  (c["timeout"]  as? Int64) ?? Int64((c["timeout"]  as? Int) ?? 0),
                 cooldown: (c["cooldown"] as? Int64) ?? Int64((c["cooldown"] as? Int) ?? 0),
-                modifier: (c["modifier"] as? Double) ?? Double((c["modifier"] as? Int) ?? 1)
+                modifier: (c["modifier"] as? Double) ?? Double((c["modifier"] as? Int) ?? 1),
+                serverTimestamp: serverTs
             )
         } catch { return nil }
     }

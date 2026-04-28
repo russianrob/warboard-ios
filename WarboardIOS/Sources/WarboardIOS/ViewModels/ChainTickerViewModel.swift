@@ -39,9 +39,12 @@ final class ChainTickerViewModel: ObservableObject {
     func stop() { task?.cancel(); task = nil }
 
     private func tick() async {
-        // Anchor on request-start time, not response-end — keeps the
-        // Live Activity's countdown in sync with Torn's actual chain
-        // timer (otherwise we run ~1-2 s ahead due to network RTT).
+        // Anchor preference order:
+        //   1. Torn server timestamp from the response (matches Torn's
+        //      in-game UI exactly; removes both network RTT AND any
+        //      client-side clock skew from the displayed countdown).
+        //   2. Fallback: requestStart wall-clock — only used if the
+        //      response is malformed and serverTimestamp wasn't parsed.
         let requestStart = Int64(Date().timeIntervalSince1970 * 1000)
         guard !prefs.apiKey.isEmpty,
               let chain = await TornAPI.fetchFactionChain(apiKey: prefs.apiKey) else {
@@ -70,8 +73,14 @@ final class ChainTickerViewModel: ObservableObject {
         chainCurrent = chain.current
         nextMilestone = nextChainMilestone(chain.current)
 
-        let incomingTimeoutDl  = chain.timeout  > 0 ? requestStart + chain.timeout  * 1000 : 0
-        let incomingCooldownDl = chain.cooldown > 0 ? requestStart + chain.cooldown * 1000 : 0
+        // Anchor on Torn's server timestamp (epoch sec → ms). Falls
+        // back to requestStart only if parsing failed and serverTimestamp
+        // came in as 0.
+        let anchorMs = chain.serverTimestamp > 0
+            ? chain.serverTimestamp * 1000
+            : requestStart
+        let incomingTimeoutDl  = chain.timeout  > 0 ? anchorMs + chain.timeout  * 1000 : 0
+        let incomingCooldownDl = chain.cooldown > 0 ? anchorMs + chain.cooldown * 1000 : 0
 
         // Same min-of-(prev, new) guard the Android VM uses. Reset
         // when count changes — a fresh hit legitimately bumps the timer.
