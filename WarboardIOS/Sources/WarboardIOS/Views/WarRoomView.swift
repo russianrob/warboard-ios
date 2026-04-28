@@ -340,8 +340,14 @@ private struct TargetList: View {
                 calledBy: t.calledBy, calledById: t.calledById
             )
         }
+        // Sort key uses releaseAtMs (immutable, ms-precision) instead of
+        // untilSec (recomputed per-tick, /1000 integer truncation). With
+        // untilSec, two targets within the same 1-second bucket would tie
+        // → swap on next tick → visible row reordering ("targets keep
+        // moving"). releaseAtMs is stable per render unless a poll
+        // actually reports new data.
         let sorted = live.sorted { lhs, rhs in
-            (priority(lhs), lhs.untilSec) < (priority(rhs), rhs.untilSec)
+            (priority(lhs), lhs.releaseAtMs) < (priority(rhs), rhs.releaseAtMs)
         }
         List(sorted) { t in
             TargetRow(target: t,
