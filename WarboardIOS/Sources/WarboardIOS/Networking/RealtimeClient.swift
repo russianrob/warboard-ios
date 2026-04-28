@@ -122,6 +122,14 @@ final class RealtimeClient {
         Task { @MainActor in self.events.send(event) }
     }
 
+    /// Inject a synthetic event into the same publisher subscribers
+    /// already listen on. Used by sendShout to echo the sender's own
+    /// broadcast immediately, so the toast appears even if Socket.IO
+    /// hadn't connected by the time the shout fired.
+    func injectGlobalToast(_ payload: [String: Any]) {
+        publish(.globalToast(payload))
+    }
+
     /// Discriminated union for every event the warboard server emits
     /// over Socket.IO. The associated value is the raw payload — view
     /// models pull what they need (server schemas evolve, view models

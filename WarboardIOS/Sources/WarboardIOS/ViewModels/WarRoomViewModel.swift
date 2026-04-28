@@ -354,7 +354,18 @@ final class WarRoomViewModel: ObservableObject {
                 warId: war.warId, message: message
             )
             switch result {
-            case .ok:                shoutResult = "Shout sent"
+            case .ok:
+                shoutResult = "Shout sent"
+                // Local echo — surface OUR own broadcast to the toast
+                // overlay immediately. Without this, the sender's toast
+                // only appears when Socket.IO happens to be connected at
+                // shout time (race on cold-start: tick → ensureAuth →
+                // RealtimeClient.connect can lag the shout by seconds).
+                RealtimeClient.shared.injectGlobalToast([
+                    "message": message,
+                    "type": "warning",
+                    "senderName": "You",
+                ])
             case .error(let msg):    shoutResult = "Shout failed: \(msg)"
             }
         }
