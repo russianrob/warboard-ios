@@ -199,7 +199,13 @@ final class WarRoomViewModel: ObservableObject {
             return
         }
         postWarHoldStartMs = 0
-        let merged = mergeMonotonic(wars[0])
+        // Server returns both the real war record (warId = numeric Torn
+        // ID like "40638") AND a synthetic placeholder (warId =
+        // "war_<factionId>", used when no real warId is known yet). Prefer
+        // the real one — joining the synthetic room means broadcasts /
+        // realtime events emitted to the real war's room never reach us.
+        let chosen = wars.first(where: { !$0.warId.hasPrefix("war_") }) ?? wars[0]
+        let merged = mergeMonotonic(chosen)
         state = .active(merged)
         RealtimeClient.shared.joinWar(warId: merged.warId, factionId: a.factionId)
         if let fresh = await WarboardAPI.fetchPoll(
