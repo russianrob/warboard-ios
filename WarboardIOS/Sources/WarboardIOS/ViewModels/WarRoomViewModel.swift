@@ -114,9 +114,11 @@ final class WarRoomViewModel: ObservableObject {
                     // banner appears immediately rather than at the
                     // next scheduled poll.
                     self.refresh()
-                case .memberBars, .globalToast:
+                case .memberBars, .globalToast,
+                     .chatMessage, .chatDeleted:
                     // Not consumed here — FactionViewModel handles
-                    // member_bars; toasts are app-wide.
+                    // member_bars; toasts are app-wide; chat events
+                    // are owned by ChatViewModel scoped to the Chat tab.
                     break
                 }
             }
