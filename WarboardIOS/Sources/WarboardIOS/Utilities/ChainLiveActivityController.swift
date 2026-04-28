@@ -70,11 +70,22 @@ final class ChainLiveActivityController {
             enemyScore: enemyScore
         )
 
-        // End conditions — war over, or there's no chain to surface.
-        // Don't start an activity for chain == 0 (between chains) since
-        // there's nothing to count down to.
-        let shouldHaveActivity = !warEnded && chain >= 1
-            && (timeoutDeadlineMs > 0 || cooldownDeadlineMs > 0)
+        // End conditions — war over, chain == 0 (between chains), OR
+        // the displayed timeout has already elapsed in wall-clock time.
+        // Without the elapsed check, the Dynamic Island / lock-screen
+        // widget visibly sits at "0:00" between the moment the chain
+        // breaks (deadline past) and the next /api/poll cycle (~15 s)
+        // when chain finally reports as 0. Killing the activity the
+        // instant the deadline passes hides the dead 0:00 immediately.
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        let timeoutElapsed = effectiveTimeout > 0 && effectiveTimeout <= nowMs
+        let cooldownElapsed = effectiveCooldown > 0 && effectiveCooldown <= nowMs
+        // If we still have a live cooldown (chain hit cooldown but
+        // hasn't broken yet), keep the activity to show the cooldown
+        // bar. Only end if BOTH timer dimensions are dead.
+        let anyTimerLive = (effectiveTimeout > 0 && !timeoutElapsed)
+            || (effectiveCooldown > 0 && !cooldownElapsed)
+        let shouldHaveActivity = !warEnded && chain >= 1 && anyTimerLive
 
         if !shouldHaveActivity {
             if let active = current {
