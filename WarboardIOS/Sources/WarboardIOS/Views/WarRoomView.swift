@@ -339,20 +339,17 @@ private struct TargetList: View {
         // perceived this as "rows moving back and forth" while the
         // DEFEAT/VICTORY banner was up). When live, the remap stays —
         // it's what powers the live "X:YY" countdown chips.
-        let live: [EnemyTarget]
-        if warEnded {
-            live = war.targets
-        } else {
-            live = war.targets.map { t -> EnemyTarget in
-                guard t.releaseAtMs > 0 else { return t }
-                let remaining = max(0, (t.releaseAtMs - nowMs) / 1000)
-                return EnemyTarget(
-                    id: t.id, name: t.name, level: t.level, status: t.status,
-                    description: t.description, untilSec: remaining,
-                    releaseAtMs: t.releaseAtMs, activity: t.activity,
-                    calledBy: t.calledBy, calledById: t.calledById
-                )
-            }
+        // ViewBuilder doesn't allow if/else for value assignment, so
+        // compute via an immediately-invoked closure.
+        let live: [EnemyTarget] = warEnded ? war.targets : war.targets.map { t -> EnemyTarget in
+            guard t.releaseAtMs > 0 else { return t }
+            let remaining = max(0, (t.releaseAtMs - nowMs) / 1000)
+            return EnemyTarget(
+                id: t.id, name: t.name, level: t.level, status: t.status,
+                description: t.description, untilSec: remaining,
+                releaseAtMs: t.releaseAtMs, activity: t.activity,
+                calledBy: t.calledBy, calledById: t.calledById
+            )
         }
         // Sort key uses releaseAtMs (immutable, ms-precision) instead of
         // untilSec (recomputed per-tick, /1000 integer truncation). With
