@@ -11,6 +11,7 @@ enum WarSubTab: String, CaseIterable, Identifiable {
 
 struct WarRoomView: View {
     @EnvironmentObject private var prefs: PrefsStore
+    @EnvironmentObject private var chainTicker: ChainTickerViewModel
     @StateObject private var vm = WarRoomViewModel()
     @State private var nowMs: Int64 = Int64(Date().timeIntervalSince1970 * 1000)
     @State private var subTab: WarSubTab = .targets
@@ -38,8 +39,10 @@ struct WarRoomView: View {
                 switch subTab {
                 case .targets:
                     WarBody(war: war, poll: vm.poll, nowMs: nowMs,
-                            chainTimeoutDeadlineMs: vm.chainTimeoutDeadlineMs,
-                            chainCooldownDeadlineMs: vm.chainCooldownDeadlineMs,
+                            chainCurrent: chainTicker.chainCurrent,
+                            chainNextMilestone: chainTicker.nextMilestone > 0 ? chainTicker.nextMilestone : 10,
+                            chainTimeoutDeadlineMs: chainTicker.timeoutDeadlineMs,
+                            chainCooldownDeadlineMs: chainTicker.cooldownDeadlineMs,
                             enemyStats: vm.enemyStats,
                             travelInfo: vm.travelInfo,
                             onCall:   { target in Task { await vm.call(target) } },
@@ -138,6 +141,8 @@ private struct WarBody: View {
     let war: WarSnapshot
     let poll: WarPoll?
     let nowMs: Int64
+    let chainCurrent: Int
+    let chainNextMilestone: Int
     let chainTimeoutDeadlineMs: Int64
     let chainCooldownDeadlineMs: Int64
     let enemyStats: [String: Int64]
@@ -150,6 +155,8 @@ private struct WarBody: View {
         let warEnded = poll?.warEnded == true
         VStack(spacing: 0) {
             HeaderCard(war: war, poll: poll, nowMs: nowMs,
+                       chainCurrent: chainCurrent,
+                       chainNextMilestone: chainNextMilestone,
                        chainTimeoutDeadlineMs: chainTimeoutDeadlineMs,
                        chainCooldownDeadlineMs: chainCooldownDeadlineMs)
                 .padding(12)
@@ -209,6 +216,8 @@ private struct HeaderCard: View {
     let war: WarSnapshot
     let poll: WarPoll?
     let nowMs: Int64
+    let chainCurrent: Int
+    let chainNextMilestone: Int
     let chainTimeoutDeadlineMs: Int64
     let chainCooldownDeadlineMs: Int64
 
@@ -238,9 +247,16 @@ private struct HeaderCard: View {
                 }
             }
             WarTimerRow(war: war, poll: poll, nowMs: nowMs)
-            ChainBar(war: war, poll: poll, nowMs: nowMs,
-                     timeoutDeadlineMs: chainTimeoutDeadlineMs,
-                     cooldownDeadlineMs: chainCooldownDeadlineMs)
+            // Same ChainBarRow visual the Status tab uses, fed by the
+            // ChainTickerViewModel — looks flush with the personal
+            // bars when you flip between tabs.
+            ChainBarRow(
+                chainCurrent: chainCurrent,
+                nextMilestone: chainNextMilestone,
+                timeoutDeadlineMs: chainTimeoutDeadlineMs,
+                cooldownDeadlineMs: chainCooldownDeadlineMs,
+                nowMs: nowMs,
+            )
         }
         .padding(12)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
@@ -310,44 +326,6 @@ private struct WarTimerRow: View {
         let h = totalSeconds / 3600
         let m = (totalSeconds % 3600) / 60
         return String(format: "%d:%02d", h, m)
-    }
-}
-
-private struct ChainBar: View {
-    let war: WarSnapshot
-    let poll: WarPoll?
-    let nowMs: Int64
-    /// Wall-clock deadlines stamped at fetch time by the VM. Drives
-    /// smooth per-second countdowns instead of static snapshot values.
-    let timeoutDeadlineMs: Int64
-    let cooldownDeadlineMs: Int64
-
-    var body: some View {
-        let chain = poll?.chainCurrent ?? war.chainCurrent ?? 0
-        let toSec: Int64 = timeoutDeadlineMs  > 0 ? max(0, (timeoutDeadlineMs  - nowMs) / 1000) : 0
-        let cdSec: Int64 = cooldownDeadlineMs > 0 ? max(0, (cooldownDeadlineMs - nowMs) / 1000) : 0
-        let nextBonus = nextChainMilestone(chain)
-        let color: Color = {
-            if chain == 0 || cdSec > 0 { return .secondary }
-            if toSec <= 30 { return .red }
-            if toSec <= 60 { return .orange }
-            return .green
-        }()
-        let status: String = {
-            if chain == 0 { return "no chain" }
-            if cdSec > 0 { return "cooldown \(formatDur(Int(cdSec)))" }
-            if toSec > 0 { return "breaks in \(formatDur(Int(toSec)))" }
-            return "—"
-        }()
-        HStack {
-            Label("Chain \(chain)/\(nextBonus)", systemImage: "link")
-                .foregroundColor(color)
-                .font(.subheadline.bold())
-            Spacer()
-            Text(status).foregroundColor(color).font(.caption.bold())
-        }
-        .padding(.horizontal, 10).padding(.vertical, 6)
-        .background(color.opacity(0.15), in: Capsule())
     }
 }
 

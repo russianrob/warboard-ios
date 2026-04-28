@@ -86,7 +86,13 @@ private struct DashboardBody: View {
             // it alongside Energy/Nerve. Synthesised from the
             // ChainTickerViewModel (always-on chain poll, no war
             // required) — same BarRow visual as the personal bars.
-            ChainBarRow(ticker: chainTicker, nowMs: nowMs)
+            ChainBarRow(
+                chainCurrent: chainTicker.chainCurrent,
+                nextMilestone: chainTicker.nextMilestone > 0 ? chainTicker.nextMilestone : 10,
+                timeoutDeadlineMs: chainTicker.timeoutDeadlineMs,
+                cooldownDeadlineMs: chainTicker.cooldownDeadlineMs,
+                nowMs: nowMs,
+            )
 
             let drug    = live(snap.drugSeconds)
             let medical = live(snap.medicalSeconds)
@@ -144,61 +150,6 @@ private struct BarRow: View {
                     Spacer()
                     Text("Full in \(formatDur(liveFulltime))")
                         .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-}
-
-/// Faction chain rendered as a Bar — same visual style as Energy /
-/// Nerve so it sits naturally with them. Source is the always-on
-/// ChainTickerViewModel (Torn /v2/faction direct, freshest possible).
-private struct ChainBarRow: View {
-    @ObservedObject var ticker: ChainTickerViewModel
-    let nowMs: Int64
-
-    var body: some View {
-        let chain = ticker.chainCurrent
-        let nextMilestone = ticker.nextMilestone > 0 ? ticker.nextMilestone : 10
-        // Show countdown only when the chain is actually live.
-        let toMs = ticker.timeoutDeadlineMs
-        let cdMs = ticker.cooldownDeadlineMs
-        let toRemaining = toMs > 0 ? max(0, Int((toMs - nowMs) / 1000)) : 0
-        let cdRemaining = cdMs > 0 ? max(0, Int((cdMs - nowMs) / 1000)) : 0
-
-        let pct = Double(chain) / Double(max(nextMilestone, 1))
-        let color: Color = chain == 0 ? .secondary
-                         : (toRemaining > 0 && toRemaining <= 30) ? .red
-                         : (toRemaining > 0 && toRemaining <= 60) ? .orange
-                         : .orange
-
-        VStack(spacing: 4) {
-            HStack {
-                Text("Chain").font(.subheadline.weight(.medium))
-                Spacer()
-                Text("\(chain) / \(nextMilestone)")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            ProgressView(value: pct).tint(color)
-            if chain == 0 {
-                HStack {
-                    Spacer()
-                    Text("no chain").font(.caption2).foregroundStyle(.secondary)
-                }
-            } else if cdRemaining > 0 {
-                HStack {
-                    Spacer()
-                    Text("Cooldown \(formatDur(cdRemaining))")
-                        .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
-                }
-            } else if toRemaining > 0 {
-                HStack {
-                    Spacer()
-                    Text("Breaks in \(formatDur(toRemaining))")
-                        .font(.caption2.monospacedDigit())
-                        .foregroundColor(toRemaining <= 30 ? .red
-                                       : toRemaining <= 60 ? .orange : .secondary)
                 }
             }
         }
