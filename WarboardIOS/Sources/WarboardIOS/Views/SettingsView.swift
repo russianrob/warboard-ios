@@ -264,7 +264,25 @@ final class AdminSettingsViewModel: ObservableObject {
     @Published var status: String?
 
     func load(prefs: PrefsStore) async {
-        guard let a = prefs.cachedJwt() else { return }
+        // Re-auth when cached JWT has no factionPosition — old caches
+        // (pre-v0.4.7) didn't store the role, which silently hides the
+        // Admin section for leaders. Re-authing once writes the new
+        // shape into PrefsStore for the rest of the JWT lifetime.
+        var a = prefs.cachedJwt()
+        if a == nil || (a?.factionPosition.isEmpty ?? true), !prefs.apiKey.isEmpty {
+            if let fresh = await WarboardAPI.authenticate(baseUrl: prefs.baseUrl, apiKey: prefs.apiKey) {
+                let cached = CachedAuth(
+                    token: fresh.token,
+                    factionId: fresh.player.factionId,
+                    factionName: fresh.player.factionName,
+                    playerId: fresh.player.playerId,
+                    factionPosition: fresh.player.factionPosition ?? ""
+                )
+                prefs.storeJwt(cached)
+                a = cached
+            }
+        }
+        guard let a = a else { return }
         auth = a
         guard a.isAdmin else { return }
         let wars = await WarboardAPI.fetchWars(

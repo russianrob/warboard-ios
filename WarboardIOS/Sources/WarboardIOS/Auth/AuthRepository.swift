@@ -10,7 +10,15 @@ final class AuthRepository {
 
     func ensureAuth() async -> CachedAuth? {
         if prefs.apiKey.isEmpty { return nil }
-        if let cached = prefs.cachedJwt(), !cached.token.isEmpty { return cached }
+        // Force re-auth if factionPosition is empty on the cached entry —
+        // caches written by older app versions (pre-v0.4.7) didn't store
+        // the role. Without it the Admin section can't gate correctly,
+        // silently hiding leader-only settings.
+        if let cached = prefs.cachedJwt(),
+           !cached.token.isEmpty,
+           !cached.factionPosition.isEmpty {
+            return cached
+        }
 
         guard let result = await WarboardAPI.authenticate(
             baseUrl: prefs.baseUrl, apiKey: prefs.apiKey
