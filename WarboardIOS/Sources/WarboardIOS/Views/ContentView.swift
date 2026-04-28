@@ -20,5 +20,8 @@ struct ContentView: View {
             NavigationStack { SettingsView() }
                 .tabItem { Label("Settings", systemImage: "gear") }
         }
+        // App-wide shout banner — listens to RealtimeClient.globalToast
+        // so any tab shows the broadcast (and the sender sees their own).
+        .overlay(alignment: .top) { ShoutToastOverlay() }
     }
 }
