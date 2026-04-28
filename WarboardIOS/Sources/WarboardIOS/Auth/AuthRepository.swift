@@ -19,7 +19,8 @@ final class AuthRepository {
             token: result.token,
             factionId: result.player.factionId,
             factionName: result.player.factionName,
-            playerId: result.player.playerId
+            playerId: result.player.playerId,
+            factionPosition: result.player.factionPosition ?? ""
         )
         prefs.storeJwt(auth)
         return auth

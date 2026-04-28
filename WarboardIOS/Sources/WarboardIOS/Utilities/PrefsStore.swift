@@ -12,6 +12,7 @@ final class PrefsStore: ObservableObject {
     private static let kFactionId = "warboard.factionId"
     private static let kFactionName = "warboard.factionName"
     private static let kPlayerId = "warboard.playerId"
+    private static let kFactionPosition = "warboard.factionPosition"
     private static let kNotifyChain = "warboard.notify.chain"
     private static let kNotifyVault = "warboard.notify.vault"
     private static let kMenuBarChain = "warboard.menubar.chain"
@@ -43,7 +44,8 @@ final class PrefsStore: ObservableObject {
             token: token,
             factionId: defaults.string(forKey: Self.kFactionId) ?? "",
             factionName: defaults.string(forKey: Self.kFactionName) ?? "",
-            playerId: defaults.string(forKey: Self.kPlayerId) ?? ""
+            playerId: defaults.string(forKey: Self.kPlayerId) ?? "",
+            factionPosition: defaults.string(forKey: Self.kFactionPosition) ?? ""
         )
     }
 
@@ -52,10 +54,11 @@ final class PrefsStore: ObservableObject {
         defaults.set(auth.factionId, forKey: Self.kFactionId)
         defaults.set(auth.factionName, forKey: Self.kFactionName)
         defaults.set(auth.playerId, forKey: Self.kPlayerId)
+        defaults.set(auth.factionPosition, forKey: Self.kFactionPosition)
     }
 
     func clearJwt() {
-        for key in [Self.kJwt, Self.kFactionId, Self.kFactionName, Self.kPlayerId] {
+        for key in [Self.kJwt, Self.kFactionId, Self.kFactionName, Self.kPlayerId, Self.kFactionPosition] {
             defaults.removeObject(forKey: key)
         }
     }

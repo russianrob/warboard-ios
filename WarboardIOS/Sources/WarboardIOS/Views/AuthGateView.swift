@@ -65,7 +65,8 @@ final class AuthGateViewModel: ObservableObject {
                     token: auth.token,
                     factionId: auth.player.factionId,
                     factionName: auth.player.factionName,
-                    playerId: auth.player.playerId
+                    playerId: auth.player.playerId,
+                    factionPosition: auth.player.factionPosition ?? ""
                 )
                 prefs.storeJwt(cached)
                 self.state = .allowed

@@ -14,6 +14,10 @@ enum WarboardAPI {
             let playerName: String
             let factionId: String
             let factionName: String
+            /// Faction role — Leader / Co-leader / Banker / Member /
+            /// custom. Used by the Admin section in Settings to gate
+            /// the war-target / broadcast-roles controls.
+            let factionPosition: String?
         }
     }
 
@@ -309,6 +313,108 @@ enum WarboardAPI {
         } catch {
             return .error(error.localizedDescription)
         }
+    }
+
+    // MARK: Admin — war target / broadcast roles / pm2 logs
+
+    struct WarTarget: Equatable {
+        let value: Int
+        let setByName: String
+        let timestampMs: Int64
+    }
+
+    /// GET /api/war-target?warId=X — current custom war-end goal, if any.
+    static func fetchWarTarget(baseUrl: String, jwt: String, warId: String) async -> WarTarget? {
+        guard let encoded = warId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: baseUrl.trimmedSlash + "/api/war-target?warId=\(encoded)") else { return nil }
+        var req = URLRequest(url: url)
+        req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            guard (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+            let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+            guard let t = root["warTarget"] as? [String: Any] else { return nil }
+            let setBy = t["setBy"] as? [String: Any]
+            return WarTarget(
+                value: (t["value"] as? Int) ?? 0,
+                setByName: (setBy?["name"] as? String) ?? "",
+                timestampMs: (t["timestamp"] as? Int64) ?? Int64((t["timestamp"] as? Int) ?? 0)
+            )
+        } catch { return nil }
+    }
+
+    /// POST /api/war-target — set or clear (target=0 clears). Leader-gated.
+    static func setWarTarget(baseUrl: String, jwt: String, warId: String, target: Int) async -> AdminResult {
+        guard let url = URL(string: baseUrl.trimmedSlash + "/api/war-target") else { return .error("Bad URL") }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["warId": warId, "target": target])
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            if (resp as? HTTPURLResponse)?.statusCode == 200 { return .ok }
+            let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            return .error((root?["error"] as? String) ?? "HTTP \((resp as? HTTPURLResponse)?.statusCode ?? 0)")
+        } catch { return .error(error.localizedDescription) }
+    }
+
+    enum AdminResult: Equatable {
+        case ok
+        case error(String)
+    }
+
+    /// GET /api/broadcast/roles — list of role labels currently allowed
+    /// to send faction broadcasts. Defaults to leader/co-leader/banker.
+    static func fetchBroadcastRoles(baseUrl: String, jwt: String) async -> [String] {
+        guard let url = URL(string: baseUrl.trimmedSlash + "/api/broadcast/roles") else { return [] }
+        var req = URLRequest(url: url)
+        req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        do {
+            let (data, _) = try await URLSession.shared.data(for: req)
+            let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+            return (root["roles"] as? [String]) ?? []
+        } catch { return [] }
+    }
+
+    /// POST /api/broadcast/roles — replace the allowed-roles list. Leaders only.
+    static func setBroadcastRoles(baseUrl: String, jwt: String, roles: [String]) async -> AdminResult {
+        guard let url = URL(string: baseUrl.trimmedSlash + "/api/broadcast/roles") else { return .error("Bad URL") }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["roles": roles])
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            if (resp as? HTTPURLResponse)?.statusCode == 200 { return .ok }
+            let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            return .error((root?["error"] as? String) ?? "HTTP \((resp as? HTTPURLResponse)?.statusCode ?? 0)")
+        } catch { return .error(error.localizedDescription) }
+    }
+
+    struct PM2Logs: Equatable {
+        let out: String
+        let err: String
+        let timestampMs: Int64
+    }
+
+    /// GET /api/admin/pm2-logs — owner-only (playerId 137558). Last 200
+    /// lines of warboard-out / warboard-error with API keys masked.
+    static func fetchPM2Logs(baseUrl: String, jwt: String) async -> PM2Logs? {
+        guard let url = URL(string: baseUrl.trimmedSlash + "/api/admin/pm2-logs") else { return nil }
+        var req = URLRequest(url: url)
+        req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            guard (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+            let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+            return PM2Logs(
+                out: (root["out"] as? String) ?? "",
+                err: (root["err"] as? String) ?? "",
+                timestampMs: (root["timestamp"] as? Int64) ?? Int64((root["timestamp"] as? Int) ?? 0)
+            )
+        } catch { return nil }
     }
 
     // MARK: Scout report + heatmap (War sub-tabs)
