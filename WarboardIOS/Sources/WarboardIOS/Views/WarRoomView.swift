@@ -169,7 +169,8 @@ private struct WarBody: View {
             Divider()
             TargetList(war: war, nowMs: nowMs,
                        enemyStats: enemyStats, travelInfo: travelInfo,
-                       onCall: onCall, onUncall: onUncall)
+                       onCall: onCall, onUncall: onUncall,
+                       warEnded: warEnded)
                 .opacity(warEnded ? 0.4 : 1.0)
                 .allowsHitTesting(!warEnded)
         }
@@ -328,24 +329,36 @@ private struct TargetList: View {
     let travelInfo: [String: TravelInfo]
     let onCall: (EnemyTarget) -> Void
     let onUncall: (EnemyTarget) -> Void
+    let warEnded: Bool
 
     var body: some View {
-        let live = war.targets.map { t -> EnemyTarget in
-            guard t.releaseAtMs > 0 else { return t }
-            let remaining = max(0, (t.releaseAtMs - nowMs) / 1000)
-            return EnemyTarget(
-                id: t.id, name: t.name, level: t.level, status: t.status,
-                description: t.description, untilSec: remaining,
-                releaseAtMs: t.releaseAtMs, activity: t.activity,
-                calledBy: t.calledBy, calledById: t.calledById
-            )
+        // Skip the per-tick remap when the war has ended — we're in the
+        // post-war hold state, no countdowns matter, and creating fresh
+        // EnemyTarget instances each tick was triggering SwiftUI List's
+        // built-in move animations even with stable IDs (the user
+        // perceived this as "rows moving back and forth" while the
+        // DEFEAT/VICTORY banner was up). When live, the remap stays —
+        // it's what powers the live "X:YY" countdown chips.
+        let live: [EnemyTarget]
+        if warEnded {
+            live = war.targets
+        } else {
+            live = war.targets.map { t -> EnemyTarget in
+                guard t.releaseAtMs > 0 else { return t }
+                let remaining = max(0, (t.releaseAtMs - nowMs) / 1000)
+                return EnemyTarget(
+                    id: t.id, name: t.name, level: t.level, status: t.status,
+                    description: t.description, untilSec: remaining,
+                    releaseAtMs: t.releaseAtMs, activity: t.activity,
+                    calledBy: t.calledBy, calledById: t.calledById
+                )
+            }
         }
         // Sort key uses releaseAtMs (immutable, ms-precision) instead of
         // untilSec (recomputed per-tick, /1000 integer truncation). With
         // untilSec, two targets within the same 1-second bucket would tie
-        // → swap on next tick → visible row reordering ("targets keep
-        // moving"). releaseAtMs is stable per render unless a poll
-        // actually reports new data.
+        // → swap on next tick → visible row reordering. releaseAtMs is
+        // stable per render unless a poll actually reports new data.
         let sorted = live.sorted { lhs, rhs in
             (priority(lhs), lhs.releaseAtMs) < (priority(rhs), rhs.releaseAtMs)
         }
@@ -358,6 +371,12 @@ private struct TargetList: View {
                 .listRowSeparator(.hidden)
         }
         .listStyle(.plain)
+        // Belt-and-suspenders: even with stable IDs + sort, disable any
+        // implicit list animations driven by per-second nowMs ticks.
+        // SwiftUI's default List animation otherwise re-runs on each
+        // body re-eval whenever the (sorted) array reference changes,
+        // which is every second.
+        .animation(nil, value: nowMs)
     }
 
     /// Sort priority — called targets pinned to the very top (you're
