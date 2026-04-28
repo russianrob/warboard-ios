@@ -20,7 +20,12 @@ struct WarboardIOSApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            // AuthGateView wraps ContentView — locks every tab
+            // (including Status / chain bar that hits Torn directly)
+            // when /api/auth returns 403. Without this, a non-DF
+            // member could install the app and at least see their
+            // own personal Torn data via the Status tab.
+            AuthGateView()
                 .environmentObject(prefs)
                 .environmentObject(chainTicker)
                 .task {

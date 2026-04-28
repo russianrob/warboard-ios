@@ -18,20 +18,47 @@ enum WarboardAPI {
     }
 
     /// POST /api/auth — exchange a Torn API key for a warboard JWT.
-    static func authenticate(baseUrl: String, apiKey: String) async -> AuthResult? {
-        guard let url = URL(string: baseUrl.trimmedSlash + "/api/auth") else { return nil }
+    /// Authentication outcome — distinguishes "access denied by faction
+    /// gate" (403) from other failures so the UI can show a precise
+    /// message and the AuthGate can lock all tabs on denial.
+    enum AuthOutcome {
+        case success(AuthResult)
+        case denied(String)   // 403 from server
+        case badKey(String)   // other 4xx / malformed response
+        case network(String)  // transport
+    }
+
+    static func authenticateOutcome(baseUrl: String, apiKey: String) async -> AuthOutcome {
+        guard let url = URL(string: baseUrl.trimmedSlash + "/api/auth") else {
+            return .network("Bad warboard URL")
+        }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try? JSONEncoder().encode(["apiKey": apiKey])
         do {
             let (data, resp) = try await URLSession.shared.data(for: req)
-            guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else { return nil }
-            return try JSONDecoder().decode(AuthResult.self, from: data)
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            if code == 200 {
+                if let auth = try? JSONDecoder().decode(AuthResult.self, from: data) {
+                    return .success(auth)
+                }
+                return .badKey("Couldn't parse auth response")
+            }
+            let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
+                ?? "HTTP \(code)"
+            if code == 403 { return .denied(msg) }
+            return .badKey(msg)
         } catch {
-            print("[WarboardAPI] auth failed: \(error.localizedDescription)")
-            return nil
+            return .network(error.localizedDescription)
         }
+    }
+
+    static func authenticate(baseUrl: String, apiKey: String) async -> AuthResult? {
+        if case .success(let r) = await authenticateOutcome(baseUrl: baseUrl, apiKey: apiKey) {
+            return r
+        }
+        return nil
     }
 
     // MARK: Wars
