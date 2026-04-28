@@ -10,19 +10,27 @@ enum FactionSubTab: String, CaseIterable, Identifiable {
 struct FactionView: View {
     @EnvironmentObject private var prefs: PrefsStore
     @StateObject private var vm = FactionViewModel()
+    @StateObject private var access = FactionAccessViewModel()
     @State private var subTab: FactionSubTab = .vault
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("", selection: $subTab) {
-                ForEach(FactionSubTab.allCases) { Text($0.label).tag($0) }
+            // Members sub-tab is admin-only — non-admins only see Vault
+            // (with the submit form; the pending-requests list is also
+            // admin-only inside VaultPanel).
+            if access.isAdmin {
+                Picker("", selection: $subTab) {
+                    ForEach(FactionSubTab.allCases) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 12).padding(.top, 8)
             }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, 12).padding(.top, 8)
 
             switch subTab {
-            case .vault:   VaultPanel(vm: vm)
-            case .members: MembersPanel(vm: vm)
+            case .vault:   VaultPanel(vm: vm, isAdmin: access.isAdmin)
+            case .members:
+                if access.isAdmin { MembersPanel(vm: vm) }
+                else { VaultPanel(vm: vm, isAdmin: false) }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -33,7 +41,10 @@ struct FactionView: View {
                     
             }
         }
-        .onAppear { vm.bind(prefs: prefs); vm.start() }
+        .onAppear {
+            vm.bind(prefs: prefs); vm.start()
+            Task { await access.load(prefs: prefs) }
+        }
         .onDisappear { vm.stop() }
         .alert(item: Binding(
             get: { vm.statusMessage.map { IdString(value: $0) } },
@@ -50,8 +61,16 @@ struct FactionView: View {
 
 private struct VaultPanel: View {
     @ObservedObject var vm: FactionViewModel
+    let isAdmin: Bool
+    @EnvironmentObject private var prefs: PrefsStore
     @State private var amountText = ""
     @State private var targetOnline = false
+    // Hoisted up from VaultRow because the row gets re-created when the
+    // requests list refreshes after a claim — which destroyed the row's
+    // @State sheet binding mid-presentation, causing the in-app browser
+    // to flash up and immediately disappear. The Panel survives the
+    // refresh, so the sheet stays presented.
+    @State private var sheet: SafariSheet?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -86,25 +105,68 @@ private struct VaultPanel: View {
             .padding(12)
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
 
-            // Pending list
-            if vm.vaultRequests.isEmpty {
-                Text("No pending vault requests.")
-                    .foregroundStyle(.secondary).font(.subheadline)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.top, 40)
-            } else {
-                List {
-                    ForEach(vm.vaultRequests) { r in
-                        VaultRow(request: r,
-                                 onClaim: { vm.claim(r.id) },
-                                 onCancel: { vm.cancel(r.id) })
+            // Pending requests list — admin-only. Regular members can
+            // submit requests above but only bankers / leaders see and
+            // act on the queue.
+            if isAdmin {
+                if vm.vaultRequests.isEmpty {
+                    Text("No pending vault requests.")
+                        .foregroundStyle(.secondary).font(.subheadline)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.top, 40)
+                } else {
+                    List {
+                        ForEach(vm.vaultRequests) { r in
+                            VaultRow(request: r,
+                                     onClaim: {
+                                         // Open the in-app browser FIRST
+                                         // (parent's sheet survives the
+                                         // post-claim list refresh), then
+                                         // mark the request claimed.
+                                         openLink("https://www.torn.com/factions.php?step=your#/tab=controls")
+                                         vm.claim(r.id)
+                                     },
+                                     onCancel: { vm.cancel(r.id) })
+                        }
                     }
+                    .listStyle(.plain)
                 }
-                .listStyle(.plain)
+            } else {
+                Text("Your request goes to the bankers — they'll see it in their Faction tab.")
+                    .foregroundStyle(.secondary).font(.caption)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 16)
             }
             Spacer()
         }
         .padding(12)
+        .sheet(item: $sheet) { $0 }
+    }
+
+    private func openLink(_ urlString: String) {
+        guard let url = URL(string: urlString) else { return }
+        if prefs.linkOpenInApp { sheet = url.asSafariSheet }
+        else { UIApplication.shared.open(url) }
+    }
+}
+
+/// Tells the FactionView whether to surface admin-only panels (Members
+/// list, vault requests queue). Same shape as TabAccessViewModel but
+/// scoped to this screen so it doesn't have to round-trip through prefs.
+@MainActor
+final class FactionAccessViewModel: ObservableObject {
+    @Published var isAdmin: Bool = false
+
+    func load(prefs: PrefsStore) async {
+        guard let auth = prefs.cachedJwt(), !auth.token.isEmpty else {
+            isAdmin = false; return
+        }
+        if auth.isOwner { isAdmin = true; return }
+        let roles = await WarboardAPI.fetchBroadcastRoles(
+            baseUrl: prefs.baseUrl, jwt: auth.token
+        )
+        let myRole = auth.factionPosition.lowercased()
+        isAdmin = !myRole.isEmpty && roles.map { $0.lowercased() }.contains(myRole)
     }
 }
 
@@ -135,14 +197,11 @@ private struct VaultRow: View {
                 }
             }
             Spacer()
-            Button("Send") {
-                // Claim first (server marks the request taken), then jump
-                // straight to Torn's faction controls so the banker can
-                // execute the give-from-vault without an extra tab tap.
-                onClaim()
-                openLink("https://www.torn.com/factions.php?step=your#/tab=controls")
-            }
-            .buttonStyle(.borderedProminent).controlSize(.small)
+            // Send is wired by the parent (VaultPanel) so the in-app
+            // browser sheet stays presented across the post-claim list
+            // refresh that destroys this row's view identity.
+            Button("Send") { onClaim() }
+                .buttonStyle(.borderedProminent).controlSize(.small)
             Button("✕") { onCancel() }.buttonStyle(.bordered).controlSize(.small)
         }
         .padding(.vertical, 4)

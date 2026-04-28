@@ -15,15 +15,12 @@ struct ContentView: View {
             NavigationStack { WarRoomView() }
                 .tabItem { Label("War", systemImage: "flame.fill") }
 
-            // Faction tab is gated to roles in the broadcast-roles list
-            // (defaults to leader / co-leader / war leader / banker, but
-            // can be customised via Settings → Admin → Broadcast roles).
-            // Members data is faction-wide leadership info; non-admin
-            // members don't need a tab full of others' bars + cooldowns.
-            if access.canViewFaction {
-                NavigationStack { FactionView() }
-                    .tabItem { Label("Faction", systemImage: "person.3.fill") }
-            }
+            // Faction tab is always visible — members need the vault
+            // submit form to request money. The pending-requests list +
+            // Send/Cancel buttons + Members panel are admin-gated
+            // INSIDE FactionView (see canManageVault / canViewMembers).
+            NavigationStack { FactionView() }
+                .tabItem { Label("Faction", systemImage: "person.3.fill") }
 
             NavigationStack { SettingsView() }
                 .tabItem { Label("Settings", systemImage: "gear") }
