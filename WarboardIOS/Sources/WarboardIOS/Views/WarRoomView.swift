@@ -11,7 +11,6 @@ enum WarSubTab: String, CaseIterable, Identifiable {
 
 struct WarRoomView: View {
     @EnvironmentObject private var prefs: PrefsStore
-    @EnvironmentObject private var chainTicker: ChainTickerViewModel
     @StateObject private var vm = WarRoomViewModel()
     @State private var nowMs: Int64 = Int64(Date().timeIntervalSince1970 * 1000)
     @State private var subTab: WarSubTab = .targets
@@ -39,10 +38,6 @@ struct WarRoomView: View {
                 switch subTab {
                 case .targets:
                     WarBody(war: war, poll: vm.poll, nowMs: nowMs,
-                            chainCurrent: chainTicker.chainCurrent,
-                            chainNextMilestone: chainTicker.nextMilestone > 0 ? chainTicker.nextMilestone : 10,
-                            chainTimeoutDeadlineMs: chainTicker.timeoutDeadlineMs,
-                            chainCooldownDeadlineMs: chainTicker.cooldownDeadlineMs,
                             enemyStats: vm.enemyStats,
                             travelInfo: vm.travelInfo,
                             onCall:   { target in Task { await vm.call(target) } },
@@ -141,10 +136,6 @@ private struct WarBody: View {
     let war: WarSnapshot
     let poll: WarPoll?
     let nowMs: Int64
-    let chainCurrent: Int
-    let chainNextMilestone: Int
-    let chainTimeoutDeadlineMs: Int64
-    let chainCooldownDeadlineMs: Int64
     let enemyStats: [String: Int64]
     let travelInfo: [String: TravelInfo]
     let onCall: (EnemyTarget) -> Void
@@ -154,11 +145,7 @@ private struct WarBody: View {
     var body: some View {
         let warEnded = poll?.warEnded == true
         VStack(spacing: 0) {
-            HeaderCard(war: war, poll: poll, nowMs: nowMs,
-                       chainCurrent: chainCurrent,
-                       chainNextMilestone: chainNextMilestone,
-                       chainTimeoutDeadlineMs: chainTimeoutDeadlineMs,
-                       chainCooldownDeadlineMs: chainCooldownDeadlineMs)
+            HeaderCard(war: war, poll: poll, nowMs: nowMs)
                 .padding(12)
             if warEnded {
                 WarEndedBanner(war: war, poll: poll, onShowReport: onShowReport)
@@ -216,10 +203,6 @@ private struct HeaderCard: View {
     let war: WarSnapshot
     let poll: WarPoll?
     let nowMs: Int64
-    let chainCurrent: Int
-    let chainNextMilestone: Int
-    let chainTimeoutDeadlineMs: Int64
-    let chainCooldownDeadlineMs: Int64
 
     var body: some View {
         let myScore    = poll?.myScore    ?? war.myScore
@@ -247,16 +230,9 @@ private struct HeaderCard: View {
                 }
             }
             WarTimerRow(war: war, poll: poll, nowMs: nowMs)
-            // Same ChainBarRow visual the Status tab uses, fed by the
-            // ChainTickerViewModel — looks flush with the personal
-            // bars when you flip between tabs.
-            ChainBarRow(
-                chainCurrent: chainCurrent,
-                nextMilestone: chainNextMilestone,
-                timeoutDeadlineMs: chainTimeoutDeadlineMs,
-                cooldownDeadlineMs: chainCooldownDeadlineMs,
-                nowMs: nowMs,
-            )
+            // Chain bar lives in the Status tab only — having it here
+            // too caused the Status copy to lag because both tabs were
+            // tugging on the same min-deadline guard.
         }
         .padding(12)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
