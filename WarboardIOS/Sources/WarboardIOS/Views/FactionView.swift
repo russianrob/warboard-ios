@@ -135,7 +135,14 @@ private struct VaultRow: View {
                 }
             }
             Spacer()
-            Button("Send") { onClaim() }.buttonStyle(.borderedProminent).controlSize(.small)
+            Button("Send") {
+                // Claim first (server marks the request taken), then jump
+                // straight to Torn's faction controls so the banker can
+                // execute the give-from-vault without an extra tab tap.
+                onClaim()
+                openLink("https://www.torn.com/factions.php?step=your#/tab=controls")
+            }
+            .buttonStyle(.borderedProminent).controlSize(.small)
             Button("✕") { onCancel() }.buttonStyle(.bordered).controlSize(.small)
         }
         .padding(.vertical, 4)
