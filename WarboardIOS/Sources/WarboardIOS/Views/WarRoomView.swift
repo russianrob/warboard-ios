@@ -103,6 +103,15 @@ struct WarRoomView: View {
             Alert(title: Text(msg.value))
         }
         .navigationTitle("War Room")
+        .toolbar {
+            // Realtime connection indicator. Green dot = Socket.IO is
+            // open (broadcasts/status updates arrive instantly), grey =
+            // poll-only fallback. Useful when debugging "did my shout
+            // actually go out?".
+            ToolbarItem(placement: .navigationBarTrailing) {
+                RealtimeIndicator()
+            }
+        }
         .onAppear {
             vm.bind(prefs: prefs)
             vm.start()
