@@ -754,11 +754,13 @@ struct HeatmapTab: View {
             guard let c = hm[d]?[h], c.samples > 0 else { return 0 }
             return Double(c.total) / Double(c.samples)
         }
-        let maxSingle = (1...7).flatMap { d in (0...23).map { h in
+        // Server stores days as 0=Mon..6=Sun (see activity-heatmap.js).
+        // Earlier 1..7 indexing was off-by-one and silently dropped Sun.
+        let maxSingle = (0...6).flatMap { d in (0...23).map { h in
             Swift.max(avg(ours, d, h), avg(theirs, d, h))
         }}.max() ?? 1.0
         let days: [(Int, String)] = [
-            (1,"Mon"),(2,"Tue"),(3,"Wed"),(4,"Thu"),(5,"Fri"),(6,"Sat"),(7,"Sun")
+            (0,"Mon"),(1,"Tue"),(2,"Wed"),(3,"Thu"),(4,"Fri"),(5,"Sat"),(6,"Sun")
         ]
         return VStack(alignment: .leading, spacing: 8) {
             Text("Activity heatmap — us vs them").font(.title3.bold())
