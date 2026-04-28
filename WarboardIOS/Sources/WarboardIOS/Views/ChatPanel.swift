@@ -11,6 +11,8 @@ struct ChatPanel: View {
     @State private var draft = ""
     @FocusState private var inputFocused: Bool
 
+    @State private var pendingDeleteId: String?
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
@@ -24,7 +26,12 @@ struct ChatPanel: View {
                         } else {
                             ForEach(vm.messages) { m in
                                 ChatRow(message: m, isAdmin: vm.isAdmin) {
-                                    Task { await vm.delete(messageId: m.id, prefs: prefs, warId: warId) }
+                                    // .swipeActions only works inside SwiftUI
+                                    // List; this view uses ScrollView+LazyVStack
+                                    // for chat layout, so use long-press →
+                                    // confirm-delete dialog instead (matches
+                                    // Android UX exactly).
+                                    pendingDeleteId = m.id
                                 }
                                 .id(m.id)
                             }
@@ -61,6 +68,23 @@ struct ChatPanel: View {
         )) {
             Button("OK") { vm.errorMessage = nil }
         } message: { Text(vm.errorMessage ?? "") }
+        // Delete confirmation — admin-only path (the long-press handler
+        // in ChatRow only fires when isAdmin, but double-checking before
+        // the destructive action couldn't hurt).
+        .alert("Delete message?", isPresented: Binding(
+            get: { pendingDeleteId != nil },
+            set: { if !$0 { pendingDeleteId = nil } }
+        )) {
+            Button("Cancel", role: .cancel) { pendingDeleteId = nil }
+            Button("Delete", role: .destructive) {
+                if let id = pendingDeleteId {
+                    pendingDeleteId = nil
+                    Task { await vm.delete(messageId: id, prefs: prefs, warId: warId) }
+                }
+            }
+        } message: {
+            Text("This is permanent — the message will be removed for all viewers.")
+        }
     }
 
     private func send() {
@@ -74,7 +98,9 @@ struct ChatPanel: View {
 private struct ChatRow: View {
     let message: WarboardAPI.ChatMessage
     let isAdmin: Bool
-    let onDelete: () -> Void
+    /// Fired on long-press by an admin — parent shows the confirm
+    /// dialog and dispatches the delete on accept.
+    let onLongPress: () -> Void
 
     private var roleColor: Color {
         switch message.factionPosition.lowercased() {
@@ -104,12 +130,11 @@ private struct ChatRow: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.vertical, 2)
-        .swipeActions(edge: .trailing) {
-            if isAdmin {
-                Button(role: .destructive, action: onDelete) {
-                    Label("Delete", systemImage: "trash")
-                }
-            }
+        .contentShape(Rectangle())
+        .onLongPressGesture(minimumDuration: 0.4) {
+            // Only admins can delete (server enforces too — this just
+            // skips firing the confirm dialog for non-admins).
+            if isAdmin { onLongPress() }
         }
     }
 }
