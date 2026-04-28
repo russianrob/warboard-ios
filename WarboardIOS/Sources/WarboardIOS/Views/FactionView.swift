@@ -119,12 +119,18 @@ private struct VaultPanel: View {
                         ForEach(vm.vaultRequests) { r in
                             VaultRow(request: r,
                                      onClaim: {
+                                         // Copy the raw amount to the
+                                         // clipboard so the banker can
+                                         // paste it straight into Torn's
+                                         // Give form (matches what the
+                                         // factionops userscript does).
+                                         UIPasteboard.general.string = "\(r.amount)"
                                          // Open the in-app browser FIRST
                                          // (parent's sheet survives the
                                          // post-claim list refresh), then
                                          // mark the request claimed.
                                          openLink("https://www.torn.com/factions.php?step=your#/tab=controls")
-                                         vm.claim(r.id)
+                                         vm.claim(r.id, amount: r.amount)
                                      },
                                      onCancel: { vm.cancel(r.id) })
                         }

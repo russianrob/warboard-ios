@@ -97,11 +97,14 @@ final class FactionViewModel: ObservableObject {
         }
     }
 
-    func claim(_ id: String) {
+    func claim(_ id: String, amount: Int64? = nil) {
         guard let prefs = prefs, !prefs.apiKey.isEmpty else { return }
         Task {
             let ok = await WarboardAPI.claimVaultRequest(baseUrl: prefs.baseUrl, apiKey: prefs.apiKey, id: id)
-            statusMessage = ok ? "Claimed — open Torn vault to send" : "Claim failed (already taken?)"
+            statusMessage = ok
+                ? (amount.map { "Amount $\(formatMoney($0)) copied — paste into Give form" }
+                   ?? "Claimed — open Torn vault to send")
+                : "Claim failed (already taken?)"
             await tick()
         }
     }
