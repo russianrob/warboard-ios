@@ -351,13 +351,20 @@ private struct TargetList: View {
                 calledBy: t.calledBy, calledById: t.calledById
             )
         }
-        // Sort key uses releaseAtMs (immutable, ms-precision) instead of
-        // untilSec (recomputed per-tick, /1000 integer truncation). With
-        // untilSec, two targets within the same 1-second bucket would tie
-        // → swap on next tick → visible row reordering. releaseAtMs is
-        // stable per render unless a poll actually reports new data.
+        // Sort by (priority, releaseAtMs, id):
+        //   - priority — bucket order (called → okay/online → okay/idle → …)
+        //   - releaseAtMs — within bucket, sooner-available floats up
+        //   - id — TIE-BREAKER. Two okay/online targets both have
+        //          releaseAtMs=0; without a tertiary key, ties resolve
+        //          on input order, and Torn's enemyStatuses keys come
+        //          back in different orders between fetches → tied rows
+        //          visibly swap places on each refresh. Locking on id
+        //          makes ordering deterministic across renders.
         let sorted = live.sorted { lhs, rhs in
-            (priority(lhs), lhs.releaseAtMs) < (priority(rhs), rhs.releaseAtMs)
+            let lp = priority(lhs); let rp = priority(rhs)
+            if lp != rp { return lp < rp }
+            if lhs.releaseAtMs != rhs.releaseAtMs { return lhs.releaseAtMs < rhs.releaseAtMs }
+            return lhs.id < rhs.id
         }
         List(sorted) { t in
             TargetRow(target: t,
