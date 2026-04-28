@@ -56,6 +56,11 @@ final class WarRoomViewModel: ObservableObject {
     @Published private(set) var chainTimeoutDeadlineMs: Int64 = 0
     @Published private(set) var chainCooldownDeadlineMs: Int64 = 0
     private var lastChainCountForDeadline: Int?
+    /// Post-war stickiness — when /api/faction/<fid>/war goes empty
+    /// but poll.warEnded is true, hold the last WarSnapshot active for
+    /// 10 min so the VICTORY/DEFEAT banner has a chance to render.
+    private var postWarHoldStartMs: Int64 = 0
+    private let postWarHoldDurationMs: Int64 = 10 * 60 * 1000
     /// Combine subscription bag for RealtimeClient events. Cancelled
     /// when the VM stops so we don't keep getting events after the
     /// War tab has been left.
@@ -163,7 +168,37 @@ final class WarRoomViewModel: ObservableObject {
             baseUrl: prefs.baseUrl, factionId: a.factionId, jwt: a.token
         )
         lastPolledAt = Date()
-        if wars.isEmpty { state = .noWar; return }
+        // Post-war stickiness — server filters out warEnded wars from
+        // the wars endpoint, so when a war ends both the active war
+        // AND the banner would silently disappear. Hold the last
+        // snapshot in .active state for 10 min after poll.warEnded
+        // flips so the VICTORY/DEFEAT banner gets a chance to show.
+        let previousActive: WarSnapshot? = {
+            if case .active(let w) = state { return w }
+            return nil
+        }()
+        if wars.isEmpty {
+            if let prev = previousActive, poll?.warEnded == true {
+                if postWarHoldStartMs == 0 {
+                    postWarHoldStartMs = Int64(Date().timeIntervalSince1970 * 1000)
+                }
+                let held = Int64(Date().timeIntervalSince1970 * 1000) - postWarHoldStartMs
+                if held < postWarHoldDurationMs {
+                    state = .active(prev)
+                    // Refresh poll on the held war so warEnded stays current.
+                    if let fresh = await WarboardAPI.fetchPoll(
+                        baseUrl: prefs.baseUrl, jwt: a.token, warId: prev.warId
+                    ) { poll = fresh }
+                    return
+                }
+                postWarHoldStartMs = 0
+            } else {
+                postWarHoldStartMs = 0
+            }
+            state = .noWar
+            return
+        }
+        postWarHoldStartMs = 0
         let merged = mergeMonotonic(wars[0])
         state = .active(merged)
         RealtimeClient.shared.joinWar(warId: merged.warId, factionId: a.factionId)
