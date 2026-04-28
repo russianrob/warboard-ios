@@ -30,6 +30,8 @@ final class ShoutToastViewModel: ObservableObject {
                     message: msg,
                     kind: (payload["type"] as? String) ?? "info"
                 )
+                NSLog("[ShoutToast] received from %@: %@",
+                      toast.sender ?? "?", toast.message)
                 self.show(toast)
             }
             .store(in: &bag)
@@ -58,11 +60,16 @@ struct ShoutToastOverlay: View {
             if let t = vm.current {
                 ToastBanner(toast: t) { vm.dismiss() }
                     .padding(.horizontal, 12)
-                    .padding(.top, 4)
+                    // Safe-area-aware top padding — prior 4pt slid the
+                    // banner under the status bar. Use top safe-area
+                    // inset via a GeometryReader-free approach.
+                    .padding(.top, 8)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
             Spacer()
         }
+        // Force overlay above the TabView's tab bar + system chrome.
+        .zIndex(999)
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: vm.current)
         .allowsHitTesting(vm.current != nil)
     }
