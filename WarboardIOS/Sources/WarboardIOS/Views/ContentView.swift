@@ -22,6 +22,16 @@ struct ContentView: View {
             NavigationStack { FactionView() }
                 .tabItem { Label("Faction", systemImage: "person.3.fill") }
 
+            // Owner-only OC Manager — Missing / Unused / Payouts. Ported
+            // from the discontinued oc-spawn-ios as a self-contained
+            // module under OCManager/. Hidden for everyone except
+            // RussianRob (auth.isOwner) so non-owner installs never
+            // see the tab nor execute any of its networking.
+            if access.canManageOC {
+                NavigationStack { ManagerView() }
+                    .tabItem { Label("OC", systemImage: "person.3.sequence.fill") }
+            }
+
             NavigationStack { SettingsView() }
                 .tabItem { Label("Settings", systemImage: "gear") }
         }
@@ -40,12 +50,19 @@ struct ContentView: View {
 @MainActor
 final class TabAccessViewModel: ObservableObject {
     @Published var canViewFaction: Bool = false
+    /// Strictly owner-only — RussianRob (137558). The OC Manager tab
+    /// performs in-app loan/retrieve via an embedded WKWebView using
+    /// the user's torn.com session, which is owner-bench-tested only.
+    /// Other admins keep using the userscript.
+    @Published var canManageOC: Bool = false
 
     func load(prefs: PrefsStore) async {
         guard let auth = prefs.cachedJwt(), !auth.token.isEmpty else {
             canViewFaction = false
+            canManageOC = false
             return
         }
+        canManageOC = auth.isOwner
         // Owner (137558) always sees every tab — useful for support &
         // debugging across factions whose admins haven't customised the
         // roles list. Otherwise, role must match the broadcast-roles
