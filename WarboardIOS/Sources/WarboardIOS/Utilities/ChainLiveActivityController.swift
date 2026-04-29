@@ -10,7 +10,21 @@ import ActivityKit
 @MainActor
 final class ChainLiveActivityController {
     static let shared = ChainLiveActivityController()
-    private init() {}
+    private init() {
+        // Adopt any activity left over from a prior app launch so our
+        // first sync() call can end it. Without this, an activity that
+        // was alive when the app died (or the user force-quit) lingers
+        // on the lock screen indefinitely because our `current`
+        // reference is nil → the chain==0 branch's `if let active`
+        // guard is false → no end call ever fires.
+        if #available(iOS 16.1, *) {
+            for a in Activity<ChainActivityAttributes>.activities
+            where a.activityState == .active {
+                current = a
+                break
+            }
+        }
+    }
 
     private var current: Activity<ChainActivityAttributes>?
     /// Track the most recent (chain, deadline) we pushed so we can
@@ -23,6 +37,20 @@ final class ChainLiveActivityController {
     private var lastChain: Int = -1
     private var lastTimeoutDeadlineMs: Int64 = 0
     private var lastCooldownDeadlineMs: Int64 = 0
+
+    /// Wall-clock timestamp of the moment we last ended an activity
+    /// because `chain` reached 0. Used as a grace window: any sync()
+    /// call within 90 s afterwards that reports chain ≥ 1 is treated
+    /// as stale data from a lagged source (typically warboard's
+    /// /api/poll, which caches Torn responses ~5-15 s behind the
+    /// direct /v2/faction reading) and is ignored. Without this guard
+    /// the lagged source can re-start the activity moments after we
+    /// killed it, then drag through another 30 s tick before settling
+    /// on chain==0 and ending again — net effect: the lock-screen
+    /// banner flashes back into existence and lingers ~30s instead
+    /// of disappearing on the chain break.
+    private var lastBrokeAtMs: Int64 = 0
+    private static let stalePostBreakWindowMs: Int64 = 90_000
 
     /// Update — or start, or end — the chain Live Activity to match
     /// the war room's current state. Idempotent: calling this on every
@@ -40,6 +68,18 @@ final class ChainLiveActivityController {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
             // System / user has disabled live activities.
             current = nil
+            return
+        }
+
+        // Stale-data rejection: if the chain just broke (we ended an
+        // activity within the last 90 s on chain==0), ignore any sync
+        // that says chain ≥ 1. It's almost certainly the lagged
+        // warboard /api/poll source still serving its cached pre-break
+        // value while Torn-direct already reads 0.
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        if chain >= 1
+            && lastBrokeAtMs > 0
+            && (nowMs - lastBrokeAtMs) < Self.stalePostBreakWindowMs {
             return
         }
 
@@ -77,7 +117,6 @@ final class ChainLiveActivityController {
         // breaks (deadline past) and the next /api/poll cycle (~15 s)
         // when chain finally reports as 0. Killing the activity the
         // instant the deadline passes hides the dead 0:00 immediately.
-        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
         let timeoutElapsed = effectiveTimeout > 0 && effectiveTimeout <= nowMs
         let cooldownElapsed = effectiveCooldown > 0 && effectiveCooldown <= nowMs
         // If we still have a live cooldown (chain hit cooldown but
@@ -88,10 +127,12 @@ final class ChainLiveActivityController {
         let shouldHaveActivity = !warEnded && chain >= 1 && anyTimerLive
 
         if !shouldHaveActivity {
-            if let active = current {
-                Task { await active.end(nil, dismissalPolicy: .immediate) }
-                current = nil
-            }
+            // Treat THIS call as the moment of the break only when
+            // chain==0 (true break) — not when warEnded or timer
+            // expiry triggered the end via a different path. Keeps
+            // the stale-data guard scoped to actual chain breaks.
+            if chain == 0 { lastBrokeAtMs = nowMs }
+            endAllActivities()
             // Reset freshness guard so a brand-new chain doesn't
             // inherit the prior min deadline.
             lastChain = -1
@@ -122,8 +163,36 @@ final class ChainLiveActivityController {
     /// End any active activity. Called when the user signs out / clears
     /// their API key, or when the war room view explicitly tears down.
     func end() {
-        guard #available(iOS 16.1, *), let active = current else { return }
-        Task { await active.end(nil, dismissalPolicy: .immediate) }
+        guard #available(iOS 16.1, *) else { return }
+        endAllActivities()
+    }
+
+    /// End every running ChainActivityAttributes activity, not just
+    /// our `current` reference. Catches orphaned activities (started
+    /// in a previous app launch we lost the reference to) and any
+    /// duplicate activities iOS may have spawned across writer races.
+    /// Pushes a final ContentState before dismissal so the widget
+    /// stops showing the pre-break countdown during the brief
+    /// dismissal animation — without a final push, iOS occasionally
+    /// freezes the last `update` content for the whole dismissal.
+    @available(iOS 16.1, *)
+    private func endAllActivities() {
+        let zeroState = ChainActivityAttributes.ContentState(
+            chain: 0,
+            timeoutDeadlineMs: 0,
+            cooldownDeadlineMs: 0,
+            myScore: 0,
+            enemyScore: 0
+        )
+        let finalContent = ActivityContent(
+            state: zeroState,
+            staleDate: Date().addingTimeInterval(-1)
+        )
+        for activity in Activity<ChainActivityAttributes>.activities {
+            Task {
+                await activity.end(finalContent, dismissalPolicy: .immediate)
+            }
+        }
         current = nil
     }
 }
