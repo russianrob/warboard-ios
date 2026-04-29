@@ -130,7 +130,8 @@ private struct VaultPanel: View {
                                          // post-claim list refresh), then
                                          // mark the request claimed.
                                          openLink("https://www.torn.com/factions.php?step=your#/tab=controls")
-                                         vm.claim(r.id, amount: r.amount)
+                                         vm.claim(r.id, amount: r.amount,
+                                                  requesterId: r.requesterId)
                                      },
                                      onCancel: { vm.cancel(r.id) })
                         }

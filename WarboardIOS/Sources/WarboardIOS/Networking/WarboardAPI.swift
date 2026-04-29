@@ -192,6 +192,31 @@ enum WarboardAPI {
         } catch { return false }
     }
 
+    /// POST /api/oc/vault-fulfillment-report — banker tells the server
+    /// "this transfer happened" so we can clear the pending request
+    /// without waiting for the (daily-quota-limited) fundsnews poller.
+    /// Optimistic — fired on Send-button tap; if the banker actually
+    /// cancels in Torn, the request would need to be re-submitted.
+    @discardableResult
+    static func reportVaultFulfillment(baseUrl: String, apiKey: String,
+                                       recipientId: String, amount: Int64) async -> Bool {
+        guard let url = URL(string: baseUrl.trimmedSlash + "/api/oc/vault-fulfillment-report") else { return false }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let body: [String: Any] = [
+            "key": apiKey,
+            "recipientId": recipientId,
+            "amount": amount,
+            "source": "ios-app",
+        ]
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        do {
+            let (_, resp) = try await URLSession.shared.data(for: req)
+            return (resp as? HTTPURLResponse)?.statusCode == 200
+        } catch { return false }
+    }
+
     @discardableResult
     static func claimVaultRequest(baseUrl: String, apiKey: String, id: String) async -> Bool {
         guard let encId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),

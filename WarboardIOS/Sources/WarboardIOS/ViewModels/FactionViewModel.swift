@@ -97,7 +97,7 @@ final class FactionViewModel: ObservableObject {
         }
     }
 
-    func claim(_ id: String, amount: Int64? = nil) {
+    func claim(_ id: String, amount: Int64? = nil, requesterId: String? = nil) {
         guard let prefs = prefs, !prefs.apiKey.isEmpty else { return }
         Task {
             let ok = await WarboardAPI.claimVaultRequest(baseUrl: prefs.baseUrl, apiKey: prefs.apiKey, id: id)
@@ -105,6 +105,16 @@ final class FactionViewModel: ObservableObject {
                 ? (amount.map { "Amount $\(formatMoney($0)) copied — paste into Give form" }
                    ?? "Claimed — open Torn vault to send")
                 : "Claim failed (already taken?)"
+            // Optimistic fulfillment report — assume the banker is going
+            // to follow through after tapping Send + opening Controls.
+            // Worst case: they cancel in Torn, the requester re-submits.
+            // Saves the daily-quota-limited fundsnews poll on the server.
+            if ok, let amount = amount, let rid = requesterId {
+                await WarboardAPI.reportVaultFulfillment(
+                    baseUrl: prefs.baseUrl, apiKey: prefs.apiKey,
+                    recipientId: rid, amount: amount
+                )
+            }
             await tick()
         }
     }
