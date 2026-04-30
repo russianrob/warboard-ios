@@ -119,6 +119,12 @@ final class ManagerViewModel: ObservableObject {
             let list = try await ManagerAPI.fetchAvailableCrimes(apiKey: key)
             crimes = .ready(list)
             lastUpdated = Date()
+        } catch let oc as OCAPIError where oc.isTransient {
+            // Keep prior data on screen — next 30s tick retries; flipping
+            // to an error placeholder for a single 504 is jarring when
+            // the user is mid-task.
+            if case .ready = crimes { /* leave intact */ }
+            else { crimes = .error(oc.errorDescription ?? "Torn is slow.") }
         } catch {
             crimes = .error((error as? LocalizedError)?.errorDescription ?? "\(error)")
         }
@@ -140,6 +146,9 @@ final class ManagerViewModel: ObservableObject {
             let items = try await ManagerAPI.fetchArmory(apiKey: key)
             armory = .ready(items)
             lastArmoryFetch = Date()
+        } catch let oc as OCAPIError where oc.isTransient {
+            if case .ready = armory { /* leave intact */ }
+            else { armory = .error(oc.errorDescription ?? "Torn is slow.") }
         } catch {
             armory = .error((error as? LocalizedError)?.errorDescription ?? "\(error)")
         }
@@ -155,6 +164,9 @@ final class ManagerViewModel: ObservableObject {
             let list = try await ManagerAPI.fetchUnpaidPayouts(apiKey: key)
             payouts = .ready(list)
             lastPayoutsFetch = Date()
+        } catch let oc as OCAPIError where oc.isTransient {
+            if case .ready = payouts { /* leave intact */ }
+            else { payouts = .error(oc.errorDescription ?? "Torn is slow.") }
         } catch {
             payouts = .error((error as? LocalizedError)?.errorDescription ?? "\(error)")
         }

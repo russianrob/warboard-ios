@@ -16,9 +16,28 @@ enum OCAPIError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .noKey:        return "Set your Torn API key in Settings."
-        case .http(let s):  return "Torn API returned HTTP \(s)."
+        case .http(let s):
+            // 5xx codes mean Torn's gateway / origin is having a moment
+            // — usually clears within a tick. Surfacing the raw code is
+            // alarming and uninformative for the end user; ManagerVM
+            // auto-retries on the next 30s tick so the friendlier copy
+            // sets the right expectation.
+            if (500...599).contains(s) {
+                return "Torn is slow right now (HTTP \(s)) — retrying automatically."
+            }
+            return "Torn API returned HTTP \(s)."
         case .decode(let e): return "Couldn't parse Torn response: \(e.localizedDescription)"
         case .transport(let e): return "Network error: \(e.localizedDescription)"
+        }
+    }
+    /// True for transient gateway / upstream errors that auto-retry
+    /// is expected to fix. Used by ManagerVM to keep prior data on
+    /// screen instead of swapping in an error placeholder.
+    var isTransient: Bool {
+        switch self {
+        case .http(let s):  return (500...599).contains(s)
+        case .transport:    return true
+        default:            return false
         }
     }
 }
