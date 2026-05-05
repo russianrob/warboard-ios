@@ -73,7 +73,31 @@ final class WarRoomViewModel: ObservableObject {
         self.auth = AuthRepository(prefs: prefs)
     }
 
+    /// Wallclock guard against rapid re-fire of start(). SwiftUI's
+    /// .onAppear / .task can fire repeatedly when a parent view
+    /// re-renders — opening a sheet, dismissing a modal, switching
+    /// tabs, scroll-restore on the Chat tab, etc. Each fire used to
+    /// cancel the previous Task and immediately run tick() (no initial
+    /// sleep), which fires fetchPoll + 2× fetchHeatmap + fetchTravelInfo
+    /// + fetchWars in parallel. A storm of .onAppear (e.g. 9 calls in
+    /// 91 ms — observed in production logs as "[ws] MrCurly joined war
+    /// room war_war_42055 ×9 within 91 ms") therefore spawned a wave of
+    /// 50+ HTTP requests per second, blew through the server's per-IP
+    /// rate limit, and caused the iOS app to surface "network error"
+    /// for every faction member.
+    private var lastStartedAt: Date = .distantPast
+    private static let startDebounceSec: TimeInterval = 5.0
+
     func start() {
+        // Debounce — see lastStartedAt comment above. If start() was
+        // already called within the last 5 seconds, the existing task
+        // is still active and there's nothing to do. The Task already
+        // running will continue ticking on its 15 s / 60 s schedule.
+        let elapsed = Date().timeIntervalSince(lastStartedAt)
+        if elapsed < Self.startDebounceSec, task != nil {
+            return
+        }
+        lastStartedAt = Date()
         task?.cancel()
         task = Task { [weak self] in
             while !Task.isCancelled {
