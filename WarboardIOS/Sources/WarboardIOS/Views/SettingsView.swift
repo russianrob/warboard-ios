@@ -293,9 +293,12 @@ final class AdminSettingsViewModel: ObservableObject {
         guard let a = a else { return }
         auth = a
         guard a.isAdmin else { return }
+        // fetchWars returns nil on transient error (429/5xx) — treat as
+        // empty for settings-screen purposes; the active war ID will be
+        // reloaded on next view appear if the user returns.
         let wars = await WarboardAPI.fetchWars(
             baseUrl: prefs.baseUrl, factionId: a.factionId, jwt: a.token
-        )
+        ) ?? []
         activeWarId = wars.first?.warId
         if let wid = activeWarId,
            let t = await WarboardAPI.fetchWarTarget(baseUrl: prefs.baseUrl, jwt: a.token, warId: wid) {
