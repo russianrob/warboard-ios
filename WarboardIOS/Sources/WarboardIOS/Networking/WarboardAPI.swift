@@ -69,19 +69,34 @@ enum WarboardAPI {
 
     /// GET /api/faction/<fid>/war — list of active wars + targets.
     /// Same shape the Android client parses.
-    static func fetchWars(baseUrl: String, factionId: String, jwt: String) async -> [WarSnapshot] {
-        guard let url = URL(string: baseUrl.trimmedSlash + "/api/faction/\(factionId)/war") else { return [] }
+    ///
+    /// Returns:
+    /// - `[WarSnapshot]` (possibly empty) on success — caller can trust the result
+    /// - `nil` on transport / rate-limit error — caller MUST preserve prior state
+    ///
+    /// The nil/empty distinction matters because the previous version
+    /// returned [] on every error, including 429 from our own per-JWT
+    /// rate limiter. WarRoomViewModel.tick() then saw empty wars and
+    /// flipped state to .noWar — surfacing "no active war" in the UI
+    /// during a transient request storm. Now nil signals "don't change
+    /// state, just retry next tick".
+    static func fetchWars(baseUrl: String, factionId: String, jwt: String) async -> [WarSnapshot]? {
+        guard let url = URL(string: baseUrl.trimmedSlash + "/api/faction/\(factionId)/war") else { return nil }
         var req = URLRequest(url: url)
         req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
         do {
             let (data, resp) = try await URLSession.shared.data(for: req)
-            guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else { return [] }
+            guard let http = resp as? HTTPURLResponse else { return nil }
+            // 429 and 5xx are transient — distinguish from a real empty
+            // list. Returning nil tells the caller to keep prior state.
+            if http.statusCode == 429 || http.statusCode >= 500 { return nil }
+            guard http.statusCode == 200 else { return nil }
             let root = try JSONSerialization.jsonObject(with: data) as? [String: Any]
             let wars = root?["wars"] as? [[String: Any]] ?? []
             return wars.map(parseWar)
         } catch {
             print("[WarboardAPI] fetchWars failed: \(error.localizedDescription)")
-            return []
+            return nil
         }
     }
 

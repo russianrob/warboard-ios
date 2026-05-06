@@ -149,7 +149,20 @@ final class WarRoomViewModel: ObservableObject {
             .store(in: &realtimeBag)
     }
 
+    /// Coalesce rapid realtime-event-driven refreshes. Without this,
+    /// one war_update / status_refreshed event = one full tick() = 5-7
+    /// HTTP fetches. The server can fire 20+ status events per second
+    /// during active war polling (each enemy member status update is
+    /// its own event), which compounded to 25+ refresh()/sec → 100+
+    /// fetches/sec → server's per-JWT 429 cap → "network error" toast.
+    /// This guard fires at most one tick per `refreshDebounceSec`.
+    private var lastRefreshAt: Date = .distantPast
+    private static let refreshDebounceSec: TimeInterval = 2.0
+
     func refresh() {
+        let elapsed = Date().timeIntervalSince(lastRefreshAt)
+        if elapsed < Self.refreshDebounceSec { return }
+        lastRefreshAt = Date()
         Task { await tick() }
     }
 
@@ -190,9 +203,13 @@ final class WarRoomViewModel: ObservableObject {
         // client no-ops when already connected with the same JWT.
         RealtimeClient.shared.connect(baseUrl: prefs.baseUrl, jwt: a.token)
         lastTickRequestStartMs = Int64(Date().timeIntervalSince1970 * 1000)
-        let wars = await WarboardAPI.fetchWars(
+        let warsOptional = await WarboardAPI.fetchWars(
             baseUrl: prefs.baseUrl, factionId: a.factionId, jwt: a.token
         )
+        // Transient fetch error (429, 5xx, network) → keep prior state
+        // and bail. Without this guard, a runaway-storm 429 would flip
+        // the UI to .noWar even though a war is genuinely active.
+        guard let wars = warsOptional else { return }
         lastPolledAt = Date()
         // Post-war stickiness — server filters out warEnded wars from
         // the wars endpoint, so when a war ends both the active war
