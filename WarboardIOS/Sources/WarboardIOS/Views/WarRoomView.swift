@@ -425,6 +425,13 @@ private struct TargetRow: View {
     /// across iOS / Android / web.)
     @State private var callPressing = false
     @State private var dealJustPlaced = false
+    /// Long-press timer for the Call button. We can't use SwiftUI's
+    /// `.onLongPressGesture` because Button's internal tap recognizer
+    /// absorbs the press and short-circuits the long-press threshold —
+    /// in v0.4.38 production we observed every press logging server-side
+    /// as `called` (isDeal=false) regardless of hold duration. Manual
+    /// DragGesture with our own Task-based timer sidesteps the conflict.
+    @State private var callPressTimer: Task<Void, Never>?
 
     var body: some View {
         HStack(spacing: 8) {
@@ -442,36 +449,54 @@ private struct TargetRow: View {
                 Button("by \(caller)") { onUncall(target) }
                     .buttonStyle(.bordered).controlSize(.small)
             } else if target.status.lowercased() == "okay" {
-                Button("Call") {
-                    // If a long-press just placed a deal call, the
-                    // released-tap fires the Button action too on iOS.
-                    // Suppress the regular call so a hold-for-deal
-                    // doesn't ALSO place a normal call.
-                    if dealJustPlaced {
-                        dealJustPlaced = false
-                        return
-                    }
-                    onCall(target)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                .tint(callPressing ? .orange : Color.accentColor)
-                .animation(.easeInOut(duration: 0.15), value: callPressing)
-                .onLongPressGesture(
-                    minimumDuration: 0.6,
-                    perform: {
-                        // 0.6s threshold reached → place deal call.
-                        // Mirrors the factionops userscript pattern
-                        // (factionops.user.js:8386 onwards) and the
-                        // Android combinedClickable's onLongClick.
-                        onDeal(target)
-                        dealJustPlaced = true
-                        UINotificationFeedbackGenerator().notificationOccurred(.success)
-                    },
-                    onPressingChanged: { pressing in
-                        callPressing = pressing
-                    }
-                )
+                // Custom-styled "Call" pill driven by a manual DragGesture
+                // so we control press-down / release / long-press timing
+                // ourselves. SwiftUI's Button + .onLongPressGesture combo
+                // didn't deliver the long-press threshold reliably (v0.4.38
+                // shipped that path; production calls all came through
+                // with isDeal=false), so this version owns the gesture
+                // pipeline outright.
+                Text("Call")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(callPressing ? Color.orange : Color.accentColor)
+                    .clipShape(Capsule())
+                    .scaleEffect(callPressing ? 0.95 : 1.0)
+                    .animation(.easeInOut(duration: 0.15), value: callPressing)
+                    .contentShape(Capsule())   // hit-test the full pill, not just the text
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { _ in
+                                if !callPressing {
+                                    callPressing = true
+                                    callPressTimer?.cancel()
+                                    callPressTimer = Task { @MainActor in
+                                        try? await Task.sleep(nanoseconds: 600_000_000)
+                                        guard !Task.isCancelled else { return }
+                                        // 0.6s reached → deal call
+                                        onDeal(target)
+                                        dealJustPlaced = true
+                                        UINotificationFeedbackGenerator().notificationOccurred(.success)
+                                    }
+                                }
+                            }
+                            .onEnded { _ in
+                                callPressing = false
+                                callPressTimer?.cancel()
+                                callPressTimer = nil
+                                // If the long-press already fired the
+                                // deal call, suppress the "released =
+                                // tap = regular call" path. Otherwise
+                                // a quick release fires a normal call.
+                                if dealJustPlaced {
+                                    dealJustPlaced = false
+                                    return
+                                }
+                                onCall(target)
+                            }
+                    )
             }
             if target.status.lowercased() == "okay" {
                 Button("Attack") {
