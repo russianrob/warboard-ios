@@ -47,6 +47,7 @@ struct WarRoomView: View {
                             travelInfo: vm.travelInfo,
                             onCall:   { target in Task { await vm.call(target) } },
                             onUncall: { target in Task { await vm.uncall(target) } },
+                            onDeal:   { target in Task { await vm.dealCall(target) } },
                             onShowReport: {
                                 showPostWar = true
                                 if vm.postWarReport == nil { vm.loadPostWarReport() }
@@ -156,6 +157,7 @@ private struct WarBody: View {
     let travelInfo: [String: TravelInfo]
     let onCall: (EnemyTarget) -> Void
     let onUncall: (EnemyTarget) -> Void
+    let onDeal: (EnemyTarget) -> Void
     let onShowReport: () -> Void
 
     var body: some View {
@@ -169,7 +171,7 @@ private struct WarBody: View {
             Divider()
             TargetList(war: war, nowMs: nowMs,
                        enemyStats: enemyStats, travelInfo: travelInfo,
-                       onCall: onCall, onUncall: onUncall,
+                       onCall: onCall, onUncall: onUncall, onDeal: onDeal,
                        warEnded: warEnded)
                 .opacity(warEnded ? 0.4 : 1.0)
                 .allowsHitTesting(!warEnded)
@@ -329,6 +331,7 @@ private struct TargetList: View {
     let travelInfo: [String: TravelInfo]
     let onCall: (EnemyTarget) -> Void
     let onUncall: (EnemyTarget) -> Void
+    let onDeal: (EnemyTarget) -> Void
     let warEnded: Bool
 
     var body: some View {
@@ -371,7 +374,7 @@ private struct TargetList: View {
                       stats: enemyStats[t.id],
                       travel: travelInfo[t.id],
                       nowMs: nowMs,
-                      onCall: onCall, onUncall: onUncall)
+                      onCall: onCall, onUncall: onUncall, onDeal: onDeal)
                 .listRowSeparator(.hidden)
         }
         .listStyle(.plain)
@@ -408,8 +411,17 @@ private struct TargetRow: View {
     let nowMs: Int64
     let onCall: (EnemyTarget) -> Void
     let onUncall: (EnemyTarget) -> Void
+    let onDeal: (EnemyTarget) -> Void
     @EnvironmentObject private var prefs: PrefsStore
     @State private var sheet: SafariSheet?
+    /// Track whether the user is currently holding the Attack button.
+    /// Used to tint the button orange while the press is in progress so
+    /// the user has visual confirmation the long-press is registering
+    /// before the 0.6s deal-call threshold triggers. Mirrors factionops'
+    /// pattern at factionops.user.js:8386 (mousedown → 600ms timer →
+    /// emitCallTarget(targetId, true) → "Deal call placed" toast).
+    @State private var attackPressing = false
+    @State private var dealJustPlaced = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -432,11 +444,32 @@ private struct TargetRow: View {
             }
             if target.status.lowercased() == "okay" {
                 Button("Attack") {
+                    // If a long-press just placed a deal call, the
+                    // released-press fires the Button action too on iOS.
+                    // Suppress the URL open in that one tick so a
+                    // hold-for-deal doesn't also pop the attack sheet.
+                    if dealJustPlaced {
+                        dealJustPlaced = false
+                        return
+                    }
                     openLink("https://www.torn.com/loader.php?sid=attack&user2ID=\(target.id)")
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
-                .tint(.red)
+                .tint(attackPressing ? .orange : .red)
+                .animation(.easeInOut(duration: 0.15), value: attackPressing)
+                .onLongPressGesture(
+                    minimumDuration: 0.6,
+                    perform: {
+                        // 0.6s threshold reached → place deal call.
+                        onDeal(target)
+                        dealJustPlaced = true
+                        UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    },
+                    onPressingChanged: { pressing in
+                        attackPressing = pressing
+                    }
+                )
             }
         }
         .padding(.vertical, 4)

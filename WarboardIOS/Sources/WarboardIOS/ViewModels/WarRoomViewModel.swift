@@ -167,20 +167,28 @@ final class WarRoomViewModel: ObservableObject {
     }
 
     func call(_ target: EnemyTarget) async {
-        await callTarget(target, action: "call")
+        await callTarget(target, action: "call", isDeal: false)
     }
     func uncall(_ target: EnemyTarget) async {
-        await callTarget(target, action: "uncall")
+        await callTarget(target, action: "uncall", isDeal: false)
+    }
+    /// Deal call — multi-hit, 15-min timeout. Triggered from a
+    /// long-press (≥0.6s) on the Attack button; the row visually
+    /// tints orange while the user is holding to confirm the gesture
+    /// is registering.
+    func dealCall(_ target: EnemyTarget) async {
+        await callTarget(target, action: "call", isDeal: true)
     }
 
-    private func callTarget(_ target: EnemyTarget, action: String) async {
+    private func callTarget(_ target: EnemyTarget, action: String, isDeal: Bool = false) async {
         guard case .active(let war) = state,
               let prefs = prefs, let auth = auth,
               let a = await auth.ensureAuth() else { return }
         _ = await WarboardAPI.callTarget(
             baseUrl: prefs.baseUrl, jwt: a.token,
             warId: war.warId, action: action,
-            targetId: target.id, targetName: target.name
+            targetId: target.id, targetName: target.name,
+            isDeal: isDeal
         )
         await tick()
     }

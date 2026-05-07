@@ -817,9 +817,14 @@ enum WarboardAPI {
     }
 
     /// POST /api/call — call/uncall an enemy in the war room.
+    /// `isDeal=true` places a multi-hit "deal" call (15-min timeout)
+    /// instead of the standard call. Server-side the only difference
+    /// is the `isDeal` flag stored on the call record + a longer
+    /// auto-expiry; clients render the badge differently.
     static func callTarget(
         baseUrl: String, jwt: String, warId: String,
-        action: String, targetId: String, targetName: String?
+        action: String, targetId: String, targetName: String?,
+        isDeal: Bool = false
     ) async -> Bool {
         guard let url = URL(string: baseUrl.trimmedSlash + "/api/call") else { return false }
         var req = URLRequest(url: url)
@@ -828,7 +833,8 @@ enum WarboardAPI {
         req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
         let body: [String: Any] = [
             "warId": warId, "action": action,
-            "targetId": targetId, "targetName": targetName ?? ""
+            "targetId": targetId, "targetName": targetName ?? "",
+            "isDeal": isDeal,
         ]
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
         do {
