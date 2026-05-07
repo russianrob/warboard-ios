@@ -414,13 +414,16 @@ private struct TargetRow: View {
     let onDeal: (EnemyTarget) -> Void
     @EnvironmentObject private var prefs: PrefsStore
     @State private var sheet: SafariSheet?
-    /// Track whether the user is currently holding the Attack button.
-    /// Used to tint the button orange while the press is in progress so
-    /// the user has visual confirmation the long-press is registering
-    /// before the 0.6s deal-call threshold triggers. Mirrors factionops'
-    /// pattern at factionops.user.js:8386 (mousedown → 600ms timer →
+    /// Track whether the user is currently holding the Call button.
+    /// Tints the button orange during the press so the user has visual
+    /// confirmation the long-press is registering before the 0.6s deal-
+    /// call threshold triggers. Mirrors factionops' pattern at
+    /// factionops.user.js:8386 (mousedown → 600ms timer →
     /// emitCallTarget(targetId, true) → "Deal call placed" toast).
-    @State private var attackPressing = false
+    /// (v0.4.37 originally placed this gesture on the red Attack button;
+    /// v0.4.38 moved it to Call to match the userscript and unify UX
+    /// across iOS / Android / web.)
+    @State private var callPressing = false
     @State private var dealJustPlaced = false
 
     var body: some View {
@@ -439,37 +442,44 @@ private struct TargetRow: View {
                 Button("by \(caller)") { onUncall(target) }
                     .buttonStyle(.bordered).controlSize(.small)
             } else if target.status.lowercased() == "okay" {
-                Button("Call") { onCall(target) }
-                    .buttonStyle(.borderedProminent).controlSize(.small)
-            }
-            if target.status.lowercased() == "okay" {
-                Button("Attack") {
+                Button("Call") {
                     // If a long-press just placed a deal call, the
-                    // released-press fires the Button action too on iOS.
-                    // Suppress the URL open in that one tick so a
-                    // hold-for-deal doesn't also pop the attack sheet.
+                    // released-tap fires the Button action too on iOS.
+                    // Suppress the regular call so a hold-for-deal
+                    // doesn't ALSO place a normal call.
                     if dealJustPlaced {
                         dealJustPlaced = false
                         return
                     }
-                    openLink("https://www.torn.com/loader.php?sid=attack&user2ID=\(target.id)")
+                    onCall(target)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
-                .tint(attackPressing ? .orange : .red)
-                .animation(.easeInOut(duration: 0.15), value: attackPressing)
+                .tint(callPressing ? .orange : Color.accentColor)
+                .animation(.easeInOut(duration: 0.15), value: callPressing)
                 .onLongPressGesture(
                     minimumDuration: 0.6,
                     perform: {
                         // 0.6s threshold reached → place deal call.
+                        // Mirrors the factionops userscript pattern
+                        // (factionops.user.js:8386 onwards) and the
+                        // Android combinedClickable's onLongClick.
                         onDeal(target)
                         dealJustPlaced = true
                         UINotificationFeedbackGenerator().notificationOccurred(.success)
                     },
                     onPressingChanged: { pressing in
-                        attackPressing = pressing
+                        callPressing = pressing
                     }
                 )
+            }
+            if target.status.lowercased() == "okay" {
+                Button("Attack") {
+                    openLink("https://www.torn.com/loader.php?sid=attack&user2ID=\(target.id)")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .tint(.red)
             }
         }
         .padding(.vertical, 4)
