@@ -475,7 +475,8 @@ final class WarRoomViewModel: ObservableObject {
                 id: t.id, name: t.name, level: t.level, status: t.status,
                 description: t.description, untilSec: t.untilSec,
                 releaseAtMs: winner, activity: t.activity,
-                calledBy: t.calledBy, calledById: t.calledById
+                calledBy: t.calledBy, calledById: t.calledById,
+                calledIsDeal: t.calledIsDeal
             )
         }
         let liveKeys = Set(fresh.targets.map { "\($0.id)|\($0.status)" })

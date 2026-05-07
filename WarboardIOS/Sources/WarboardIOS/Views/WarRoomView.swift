@@ -351,7 +351,8 @@ private struct TargetList: View {
                 id: t.id, name: t.name, level: t.level, status: t.status,
                 description: t.description, untilSec: remaining,
                 releaseAtMs: t.releaseAtMs, activity: t.activity,
-                calledBy: t.calledBy, calledById: t.calledById
+                calledBy: t.calledBy, calledById: t.calledById,
+                calledIsDeal: t.calledIsDeal
             )
         }
         // Sort by (priority, releaseAtMs, id):
@@ -446,8 +447,21 @@ private struct TargetRow: View {
             Spacer()
             StatusChip(target: target, travel: travel, nowMs: nowMs)
             if let caller = target.calledBy {
-                Button("by \(caller)") { onUncall(target) }
-                    .buttonStyle(.bordered).controlSize(.small)
+                // Deal calls (long-press) get an orange tint + 🔒 prefix
+                // so they're distinguishable at a glance from regular
+                // calls. Mirrors factionops's .fo-called-tag.fo-called-deal
+                // styling on web.
+                Button(action: { onUncall(target) }) {
+                    HStack(spacing: 3) {
+                        if target.calledIsDeal {
+                            Text("🔒").font(.caption2)
+                        }
+                        Text("by \(caller)")
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .tint(target.calledIsDeal ? .orange : Color.accentColor)
             } else if target.status.lowercased() == "okay" {
                 // Custom-styled "Call" pill driven by a manual DragGesture
                 // so we control press-down / release / long-press timing

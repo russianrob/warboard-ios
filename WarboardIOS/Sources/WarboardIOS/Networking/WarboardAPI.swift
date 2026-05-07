@@ -959,7 +959,9 @@ enum WarboardAPI {
         let targets = enemyStatuses.map { (id, s) -> EnemyTarget in
             let untilDouble = s["until"] as? Double ?? Double((s["until"] as? Int) ?? 0)
             let until = Int64(untilDouble)
-            let caller = (calls[id]?["calledBy"]) as? [String: Any]
+            let callRecord = calls[id]
+            let caller = callRecord?["calledBy"] as? [String: Any]
+            let isDeal = (callRecord?["isDeal"] as? Bool) ?? false
             return EnemyTarget(
                 id: id,
                 name: (s["name"] as? String) ?? "#\(id)",
@@ -970,7 +972,8 @@ enum WarboardAPI {
                 releaseAtMs: until > 0 ? now + until * 1000 : 0,
                 activity: (s["activity"] as? String) ?? "offline",
                 calledBy: caller?["name"] as? String,
-                calledById: caller?["id"] as? String
+                calledById: caller?["id"] as? String,
+                calledIsDeal: isDeal
             )
         }
         let scores = o["warScores"] as? [String: Any]

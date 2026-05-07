@@ -35,6 +35,11 @@ struct EnemyTarget: Identifiable, Equatable {
     let activity: String   // "online" | "idle" | "offline"
     let calledBy: String?
     let calledById: String?
+    /// True when the active call on this target is a multi-hit deal
+    /// call (long-press placement). UI distinguishes deal calls from
+    /// regular calls with a 🔒 prefix and orange tint to match the
+    /// factionops .fo-called-tag.fo-called-deal styling.
+    let calledIsDeal: Bool
 }
 
 /// Rich poll payload from `/api/poll`. v0.1 only consumes the fields
