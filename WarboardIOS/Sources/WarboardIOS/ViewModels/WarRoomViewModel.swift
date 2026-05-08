@@ -286,20 +286,22 @@ final class WarRoomViewModel: ObservableObject {
         )
         await updateChainDeadlines(merged: merged)
         evaluateChainAlerts(prefs: prefs)
-        syncLiveActivity(merged: merged)
+        syncLiveActivity(merged: merged, baseUrl: prefs.baseUrl, jwt: a.token)
     }
 
     /// Mirror the chain state into the Live Activity so the lock-screen
     /// banner + Dynamic Island show the same countdown the in-app
     /// ChainBar does.
-    private func syncLiveActivity(merged: WarSnapshot) {
+    private func syncLiveActivity(merged: WarSnapshot, baseUrl: String, jwt: String) {
         let chain = poll?.chainCurrent ?? merged.chainCurrent ?? 0
         let myScore    = poll?.myScore    ?? merged.myScore
         let enemyScore = poll?.enemyScore ?? merged.enemyScore
         let enemyName  = merged.enemyFactionName ?? poll?.enemyFactionName ?? "Enemy"
-        // Pass baseUrl + JWT so the controller can register the activity's
-        // push token with the server for APNs Live Activity push fanout
-        // (chain updates while the app is backgrounded).
+        // baseUrl + JWT come from the caller (which already awaited
+        // ensureAuth and has CachedAuth in scope) so the controller can
+        // register the activity's push token with the server for APNs
+        // Live Activity push fanout (chain updates while the app is
+        // backgrounded).
         ChainLiveActivityController.shared.sync(
             warId: merged.warId,
             enemyName: enemyName,
@@ -309,8 +311,8 @@ final class WarRoomViewModel: ObservableObject {
             myScore: myScore,
             enemyScore: enemyScore,
             warEnded: poll?.warEnded == true,
-            baseUrl: prefs?.baseUrl ?? "",
-            jwt: auth?.token ?? ""
+            baseUrl: baseUrl,
+            jwt: jwt
         )
     }
 
