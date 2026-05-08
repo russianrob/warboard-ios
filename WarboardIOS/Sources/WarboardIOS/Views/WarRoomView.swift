@@ -364,19 +364,66 @@ private struct TargetList: View {
         //          back in different orders between fetches → tied rows
         //          visibly swap places on each refresh. Locking on id
         //          makes ordering deterministic across renders.
-        let sorted = live.sorted { lhs, rhs in
+        // Next Up — uncalled hospital targets with a live timer, sorted
+        // by soonest-out, capped at 5. Mirrors warboard-native's
+        // "Next up — top N" section so admins can claim the next
+        // wave of releasable enemies before they pop. Calling a hospital
+        // target is a "queue up next" action — the server-side /api/call
+        // doesn't gate on status.
+        let nextUp = live
+            .filter { $0.status.lowercased() == "hospital" && $0.untilSec > 0 && ($0.calledBy ?? "").isEmpty }
+            .sorted { $0.untilSec < $1.untilSec }
+            .prefix(5)
+        let nextUpIds = Set(nextUp.map { $0.id })
+        let rest = live.filter { !nextUpIds.contains($0.id) }
+        let sortedRest = rest.sorted { lhs, rhs in
             let lp = priority(lhs); let rp = priority(rhs)
             if lp != rp { return lp < rp }
             if lhs.releaseAtMs != rhs.releaseAtMs { return lhs.releaseAtMs < rhs.releaseAtMs }
             return lhs.id < rhs.id
         }
-        List(sorted) { t in
-            TargetRow(target: t,
-                      stats: enemyStats[t.id],
-                      travel: travelInfo[t.id],
-                      nowMs: nowMs,
-                      onCall: onCall, onUncall: onUncall, onDeal: onDeal)
-                .listRowSeparator(.hidden)
+        List {
+            if !nextUp.isEmpty {
+                Section {
+                    ForEach(Array(nextUp)) { t in
+                        TargetRow(target: t,
+                                  stats: enemyStats[t.id],
+                                  travel: travelInfo[t.id],
+                                  nowMs: nowMs,
+                                  onCall: onCall, onUncall: onUncall, onDeal: onDeal)
+                            .listRowSeparator(.hidden)
+                    }
+                } header: {
+                    Text("Next up — top \(nextUp.count)")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.accentColor)
+                        .textCase(nil)
+                }
+                Section {
+                    ForEach(sortedRest) { t in
+                        TargetRow(target: t,
+                                  stats: enemyStats[t.id],
+                                  travel: travelInfo[t.id],
+                                  nowMs: nowMs,
+                                  onCall: onCall, onUncall: onUncall, onDeal: onDeal)
+                            .listRowSeparator(.hidden)
+                    }
+                } header: {
+                    Text("All targets")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.accentColor)
+                        .textCase(nil)
+                }
+            } else {
+                ForEach(sortedRest) { t in
+                    TargetRow(target: t,
+                              stats: enemyStats[t.id],
+                              travel: travelInfo[t.id],
+                              nowMs: nowMs,
+                              onCall: onCall, onUncall: onUncall, onDeal: onDeal)
+                        .listRowSeparator(.hidden)
+                }
+            }
         }
         .listStyle(.plain)
         // Belt-and-suspenders: even with stable IDs + sort, disable any
@@ -462,7 +509,7 @@ private struct TargetRow: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 .tint(target.calledIsDeal ? .orange : Color.accentColor)
-            } else if target.status.lowercased() == "okay" {
+            } else if isCallable(target) {
                 // Custom-styled "Call" pill driven by a manual DragGesture
                 // so we control press-down / release / long-press timing
                 // ourselves. SwiftUI's Button + .onLongPressGesture combo
@@ -470,6 +517,13 @@ private struct TargetRow: View {
                 // shipped that path; production calls all came through
                 // with isDeal=false), so this version owns the gesture
                 // pipeline outright.
+                //
+                // v0.4.43: extended to hospital targets (queue-up-next).
+                // Previously gated to status=="okay" only, which made the
+                // Next Up workflow impossible. The server's /api/call
+                // doesn't gate on status, so calling a hospital target
+                // just reserves them for whoever's planning to attack
+                // when they exit.
                 Text("Call")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.white)
@@ -542,6 +596,19 @@ private struct TargetRow: View {
 
     private var activityColor: Color {
         switch target.activity { case "online": return .green; case "idle": return .yellow; default: return .gray }
+    }
+
+    /// Whether to expose the Call pill on this row. We allow calling
+    /// "okay" targets (immediate attack) AND "hospital" targets (queue
+    /// up next — reserve them so other admins know you're waiting). We
+    /// do NOT expose Call for traveling, jail, abroad, or fallen — those
+    /// have indeterminate / very long return times and a queued call
+    /// against them would just clutter the calls map.
+    private func isCallable(_ t: EnemyTarget) -> Bool {
+        switch t.status.lowercased() {
+        case "okay", "ok", "hospital": return true
+        default: return false
+        }
     }
 }
 
