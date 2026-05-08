@@ -88,13 +88,18 @@ final class ChainLiveActivityController {
         // displayed. Prevents a stale source (warboard cache) from
         // bumping the live activity countdown back up after a fresher
         // source (Torn direct) already displayed a smaller deadline.
+        // BUT: only clamp to a previous deadline that is still in the
+        // future. If the prior deadline already elapsed, clamping would
+        // lock the widget to a past timestamp and `Text(timerInterval:)`
+        // would render "0:00" indefinitely even after a fresh Torn-
+        // direct read returned a real future deadline.
         var effectiveTimeout = timeoutDeadlineMs
         var effectiveCooldown = cooldownDeadlineMs
         if chain == lastChain {
-            if effectiveTimeout > 0 && lastTimeoutDeadlineMs > 0 {
+            if effectiveTimeout > 0 && lastTimeoutDeadlineMs > nowMs {
                 effectiveTimeout = min(effectiveTimeout, lastTimeoutDeadlineMs)
             }
-            if effectiveCooldown > 0 && lastCooldownDeadlineMs > 0 {
+            if effectiveCooldown > 0 && lastCooldownDeadlineMs > nowMs {
                 effectiveCooldown = min(effectiveCooldown, lastCooldownDeadlineMs)
             }
         }

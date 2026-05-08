@@ -27,20 +27,28 @@ struct ChainLiveActivity: Widget {
                     }
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    if context.state.timeoutDeadlineMs > 0 {
+                    if isDeadlineLive(context.state.timeoutDeadlineMs) {
                         Text(timerInterval: dateRange(deadlineMs: context.state.timeoutDeadlineMs),
                              countsDown: true)
                             .font(.subheadline.bold().monospacedDigit())
                             .foregroundColor(urgencyColor(deadlineMs: context.state.timeoutDeadlineMs))
                             .multilineTextAlignment(.trailing)
-                    } else if context.state.cooldownDeadlineMs > 0 {
+                    } else if isDeadlineLive(context.state.cooldownDeadlineMs) {
                         Text(timerInterval: dateRange(deadlineMs: context.state.cooldownDeadlineMs),
                              countsDown: true)
                             .font(.subheadline.bold().monospacedDigit())
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.trailing)
                     } else {
-                        Text("—").foregroundStyle(.secondary)
+                        // Either no deadline at all, or both deadlines
+                        // are already in the past (= stale snapshot).
+                        // Show chain count as the meaningful fallback
+                        // rather than the misleading "0:00" that
+                        // Text(timerInterval:) would render for a past
+                        // date.
+                        Text("\(context.state.chain)")
+                            .font(.subheadline.bold().monospacedDigit())
+                            .foregroundStyle(.secondary)
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
@@ -55,7 +63,7 @@ struct ChainLiveActivity: Widget {
             } compactLeading: {
                 Image(systemName: "link").foregroundColor(.orange)
             } compactTrailing: {
-                if context.state.timeoutDeadlineMs > 0 {
+                if isDeadlineLive(context.state.timeoutDeadlineMs) {
                     Text(timerInterval: dateRange(deadlineMs: context.state.timeoutDeadlineMs),
                          countsDown: true)
                         .font(.caption2.monospacedDigit())
@@ -79,8 +87,16 @@ struct ChainLiveActivity: Widget {
         return Date()...deadline
     }
 
+    /// True if the deadline is meaningfully in the future. Used to gate
+    /// `Text(timerInterval:)` so a past deadline (stale snapshot from a
+    /// backgrounded activity) doesn't render as a stuck "0:00".
+    private func isDeadlineLive(_ deadlineMs: Int64) -> Bool {
+        guard deadlineMs > 0 else { return false }
+        return deadlineMs > Int64(Date().timeIntervalSince1970 * 1000)
+    }
+
     private func urgencyColor(deadlineMs: Int64) -> Color {
-        guard deadlineMs > 0 else { return .secondary }
+        guard isDeadlineLive(deadlineMs) else { return .secondary }
         let remainingSec = max(0, (deadlineMs - Int64(Date().timeIntervalSince1970 * 1000)) / 1000)
         if remainingSec <= 30 { return .red }
         if remainingSec <= 60 { return .orange }
@@ -106,7 +122,7 @@ private struct LockScreenChainView: View {
                     Text("vs \(attrs.enemyName)")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                if state.timeoutDeadlineMs > 0 {
+                if isDeadlineLive(state.timeoutDeadlineMs) {
                     HStack(spacing: 4) {
                         Text("breaks in")
                             .font(.caption2).foregroundStyle(.secondary)
@@ -115,7 +131,7 @@ private struct LockScreenChainView: View {
                             .font(.caption.bold().monospacedDigit())
                             .foregroundColor(urgencyColor(state.timeoutDeadlineMs))
                     }
-                } else if state.cooldownDeadlineMs > 0 {
+                } else if isDeadlineLive(state.cooldownDeadlineMs) {
                     HStack(spacing: 4) {
                         Text("cooldown")
                             .font(.caption2).foregroundStyle(.secondary)
@@ -135,8 +151,13 @@ private struct LockScreenChainView: View {
         .padding(.vertical, 10)
     }
 
+    private func isDeadlineLive(_ deadlineMs: Int64) -> Bool {
+        guard deadlineMs > 0 else { return false }
+        return deadlineMs > Int64(Date().timeIntervalSince1970 * 1000)
+    }
+
     private func urgencyColor(_ deadlineMs: Int64) -> Color {
-        guard deadlineMs > 0 else { return .secondary }
+        guard isDeadlineLive(deadlineMs) else { return .secondary }
         let remainingSec = max(0, (deadlineMs - Int64(Date().timeIntervalSince1970 * 1000)) / 1000)
         if remainingSec <= 30 { return .red }
         if remainingSec <= 60 { return .orange }
