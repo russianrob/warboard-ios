@@ -555,9 +555,9 @@ private struct StatusChip: View {
         case "okay", "ok":
             EmptyView()
         case "hospital":
-            chip(icon: "🏥", text: target.untilSec > 0 ? formatHms(Int(target.untilSec)) : "out", color: .red)
+            chip(icon: "🏥", text: hospitalOrJailTimerText(prefix: "In hospital"), color: .red)
         case "jail":
-            chip(icon: "🔒", text: target.untilSec > 0 ? formatHms(Int(target.untilSec)) : "out", color: .purple)
+            chip(icon: "🔒", text: hospitalOrJailTimerText(prefix: "In jail"), color: .purple)
         case "traveling":
             let country = travel?.destination.nilIfBlank ?? countryFromDescription(target.description)
             let arrow = (travel?.returning ?? target.description.hasPrefix("Returning")) ? "←" : "→"
@@ -595,6 +595,48 @@ private struct StatusChip: View {
     private func countryFromAbroad(_ s: String) -> String {
         if let r = s.range(of: "In ") { return String(s[r.upperBound...]) }
         return s
+    }
+
+    /// Returns the timer text for hospital / jail chips. Prefers the live
+    /// untilSec countdown; falls back to parsing the description (e.g.
+    /// "In hospital for 15 mins") when untilSec is 0. The fallback prevents
+    /// the chip from flashing "out" while a target is still in-state but
+    /// our snapshot's `until` has either ticked to 0 client-side (server
+    /// hasn't yet detected the actual release via enemy-profile poll) or
+    /// was never populated by the bulk-update path that sets status from
+    /// intercepted Torn DOM data.
+    private func hospitalOrJailTimerText(prefix: String) -> String {
+        if target.untilSec > 0 {
+            return formatHms(Int(target.untilSec))
+        }
+        if let parsed = parseInStateDescription(target.description, prefix: prefix) {
+            return formatHms(parsed)
+        }
+        return "—"
+    }
+
+    /// Parses Torn-style "In <state> for N mins" / "In <state> for N hr"
+    /// descriptions to remaining seconds. Tolerates "min", "mins", "hr",
+    /// "hrs", "hour", "hours", and decimal values. Returns nil if the
+    /// pattern doesn't match.
+    private func parseInStateDescription(_ desc: String, prefix: String) -> Int? {
+        guard let range = desc.range(of: "\(prefix) for "), range.upperBound < desc.endIndex else {
+            return nil
+        }
+        let tail = desc[range.upperBound...]
+        // Pull the leading numeric value (may be int, may be decimal).
+        var numStr = ""
+        for ch in tail {
+            if ch.isNumber || ch == "." { numStr.append(ch) }
+            else if !numStr.isEmpty { break }
+        }
+        guard let n = Double(numStr), n >= 0 else { return nil }
+        let lower = tail.lowercased()
+        if lower.contains("hr") || lower.contains("hour") {
+            return Int(n * 3600)
+        }
+        // default: minutes
+        return Int(n * 60)
     }
 }
 
