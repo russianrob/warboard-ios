@@ -297,6 +297,9 @@ final class WarRoomViewModel: ObservableObject {
         let myScore    = poll?.myScore    ?? merged.myScore
         let enemyScore = poll?.enemyScore ?? merged.enemyScore
         let enemyName  = merged.enemyFactionName ?? poll?.enemyFactionName ?? "Enemy"
+        // Pass baseUrl + JWT so the controller can register the activity's
+        // push token with the server for APNs Live Activity push fanout
+        // (chain updates while the app is backgrounded).
         ChainLiveActivityController.shared.sync(
             warId: merged.warId,
             enemyName: enemyName,
@@ -305,7 +308,9 @@ final class WarRoomViewModel: ObservableObject {
             cooldownDeadlineMs: chainCooldownDeadlineMs,
             myScore: myScore,
             enemyScore: enemyScore,
-            warEnded: poll?.warEnded == true
+            warEnded: poll?.warEnded == true,
+            baseUrl: prefs?.baseUrl ?? "",
+            jwt: auth?.token ?? ""
         )
     }
 

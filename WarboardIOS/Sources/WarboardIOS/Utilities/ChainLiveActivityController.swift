@@ -38,6 +38,18 @@ final class ChainLiveActivityController {
     private var lastTimeoutDeadlineMs: Int64 = 0
     private var lastCooldownDeadlineMs: Int64 = 0
 
+    /// Long-lived task watching the current activity's pushTokenUpdates
+    /// async sequence. Each token (initial issue + any subsequent
+    /// rotation iOS performs) gets POSTed to the warboard server's
+    /// /api/live-activity/chain/subscribe so the chain monitor can fan
+    /// out APNs Live Activity pushes when chain state changes —
+    /// fixing the "0:00 forever in the background" symptom that local-
+    /// only activities suffered from.
+    private var pushTokenTask: Task<Void, Never>?
+    /// Most recent (warId, baseUrl, jwt) we registered against — kept
+    /// so we can fire the matching unsubscribe POST from endAllActivities.
+    private var lastRegistration: (warId: String, baseUrl: String, jwt: String)?
+
     /// Wall-clock timestamp of the moment we last ended an activity
     /// because `chain` reached 0. Used as a grace window: any sync()
     /// call within 90 s afterwards that reports chain ≥ 1 is treated
@@ -63,7 +75,9 @@ final class ChainLiveActivityController {
               cooldownDeadlineMs: Int64,
               myScore: Int,
               enemyScore: Int,
-              warEnded: Bool) {
+              warEnded: Bool,
+              baseUrl: String = "",
+              jwt: String = "") {
         guard #available(iOS 16.1, *) else { return }
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
             // System / user has disabled live activities.
@@ -153,16 +167,89 @@ final class ChainLiveActivityController {
             Task { await active.update(ActivityContent(state: state, staleDate: nil)) }
         } else {
             do {
+                // pushType: .token enables APNs Live Activity push from the
+                // warboard server, so chain updates land on the lock-screen
+                // / Dynamic Island even while the app is backgrounded or
+                // terminated. Local-only updates (.nil) only worked while
+                // the app was in foreground and this controller's sync()
+                // was being called.
                 let activity = try Activity<ChainActivityAttributes>.request(
                     attributes: attrs,
                     content: ActivityContent(state: state, staleDate: nil),
-                    pushType: nil
+                    pushType: .token
                 )
                 current = activity
+                // Watch for the activity's push token (and any subsequent
+                // rotations Apple does) and forward each to the server so
+                // the chain monitor knows where to push updates. Cancel
+                // any prior watcher first. pushTokenUpdates is iOS 16.2+
+                // (Activity.request itself is 16.1, hence the inner check).
+                pushTokenTask?.cancel()
+                if #available(iOS 16.2, *) {
+                    pushTokenTask = makePushTokenWatcher(activity: activity, baseUrl: baseUrl, jwt: jwt)
+                }
             } catch {
                 NSLog("[Warboard] Failed to start chain activity: \(error.localizedDescription)")
             }
         }
+    }
+
+    /// Spawn the long-lived async iterator over the activity's push
+    /// token updates. Each token (initial + rotations) is hex-encoded
+    /// and POSTed to /api/live-activity/chain/subscribe with the warId
+    /// + JWT auth. Survives token rotations Apple may do during the
+    /// activity's lifetime.
+    @available(iOS 16.2, *)
+    private func makePushTokenWatcher(activity: Activity<ChainActivityAttributes>,
+                                      baseUrl: String,
+                                      jwt: String) -> Task<Void, Never>? {
+        guard !baseUrl.isEmpty, !jwt.isEmpty else { return nil }
+        let warId = activity.attributes.warId
+        return Task { [weak self] in
+            for await tokenData in activity.pushTokenUpdates {
+                if Task.isCancelled { return }
+                let hex = tokenData.map { String(format: "%02x", $0) }.joined()
+                await Self.postLiveActivitySubscribe(baseUrl: baseUrl, jwt: jwt, warId: warId, token: hex)
+                await MainActor.run {
+                    self?.lastRegistration = (warId: warId, baseUrl: baseUrl, jwt: jwt)
+                }
+            }
+        }
+    }
+
+    /// POST the activity push token to the server. Best-effort —
+    /// network failures are logged via NSLog but don't propagate; the
+    /// activity continues showing its locally-pushed countdown.
+    private static func postLiveActivitySubscribe(baseUrl: String, jwt: String, warId: String, token: String) async {
+        guard let url = URL(string: baseUrl.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/api/live-activity/chain/subscribe") else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "warId": warId,
+            "token": token,
+        ])
+        do {
+            let (_, resp) = try await URLSession.shared.data(for: req)
+            if let http = resp as? HTTPURLResponse, http.statusCode != 200 {
+                NSLog("[Warboard] Live Activity subscribe got HTTP \(http.statusCode)")
+            }
+        } catch {
+            NSLog("[Warboard] Live Activity subscribe failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// POST unsubscribe so the server stops trying to push to a token
+    /// Apple has invalidated. Best-effort.
+    private static func postLiveActivityUnsubscribe(baseUrl: String, jwt: String, warId: String) async {
+        guard let url = URL(string: baseUrl.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/api/live-activity/chain/unsubscribe") else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["warId": warId])
+        do { _ = try await URLSession.shared.data(for: req) } catch { /* best-effort */ }
     }
 
     /// End any active activity. Called when the user signs out / clears
@@ -182,6 +269,19 @@ final class ChainLiveActivityController {
     /// freezes the last `update` content for the whole dismissal.
     @available(iOS 16.1, *)
     private func endAllActivities() {
+        // Stop watching for token rotations on the activity we're killing
+        // and tell the server to drop our token so it stops pushing to a
+        // dead address. Both are best-effort.
+        pushTokenTask?.cancel()
+        pushTokenTask = nil
+        if let reg = lastRegistration {
+            Task.detached {
+                await Self.postLiveActivityUnsubscribe(
+                    baseUrl: reg.baseUrl, jwt: reg.jwt, warId: reg.warId)
+            }
+        }
+        lastRegistration = nil
+
         let zeroState = ChainActivityAttributes.ContentState(
             chain: 0,
             timeoutDeadlineMs: 0,
