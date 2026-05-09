@@ -166,30 +166,37 @@ final class ChainLiveActivityController {
            active.activityState == .active {
             Task { await active.update(ActivityContent(state: state, staleDate: nil)) }
         } else {
+            // Try .token first (APNs push fanout from the warboard server,
+            // works while backgrounded/terminated). If that throws — most
+            // commonly because the app's aps-environment entitlement isn't
+            // set up or Push Notifications isn't enabled on the App ID —
+            // fall back to .nil so the user still gets a local-only
+            // activity. Without this fallback the activity silently fails
+            // to start and the user sees no island at all.
+            let content = ActivityContent(state: state, staleDate: nil)
+            var startedActivity: Activity<ChainActivityAttributes>? = nil
             do {
-                // pushType: .token enables APNs Live Activity push from the
-                // warboard server, so chain updates land on the lock-screen
-                // / Dynamic Island even while the app is backgrounded or
-                // terminated. Local-only updates (.nil) only worked while
-                // the app was in foreground and this controller's sync()
-                // was being called.
-                let activity = try Activity<ChainActivityAttributes>.request(
-                    attributes: attrs,
-                    content: ActivityContent(state: state, staleDate: nil),
-                    pushType: .token
-                )
+                startedActivity = try Activity<ChainActivityAttributes>.request(
+                    attributes: attrs, content: content, pushType: .token)
+            } catch {
+                NSLog("[Warboard] Live Activity push-token request failed (\(error.localizedDescription)); falling back to local-only.")
+                do {
+                    startedActivity = try Activity<ChainActivityAttributes>.request(
+                        attributes: attrs, content: content, pushType: nil)
+                } catch {
+                    NSLog("[Warboard] Live Activity local-only request also failed: \(error.localizedDescription)")
+                }
+            }
+            if let activity = startedActivity {
                 current = activity
-                // Watch for the activity's push token (and any subsequent
-                // rotations Apple does) and forward each to the server so
-                // the chain monitor knows where to push updates. Cancel
-                // any prior watcher first. pushTokenUpdates is iOS 16.2+
-                // (Activity.request itself is 16.1, hence the inner check).
+                // Watch for the activity's push token (only fires when the
+                // request used .token). Cancel any prior watcher first.
+                // pushTokenUpdates is iOS 16.2+ (Activity.request itself
+                // is 16.1, hence the inner check).
                 pushTokenTask?.cancel()
                 if #available(iOS 16.2, *) {
                     pushTokenTask = makePushTokenWatcher(activity: activity, baseUrl: baseUrl, jwt: jwt)
                 }
-            } catch {
-                NSLog("[Warboard] Failed to start chain activity: \(error.localizedDescription)")
             }
         }
     }
