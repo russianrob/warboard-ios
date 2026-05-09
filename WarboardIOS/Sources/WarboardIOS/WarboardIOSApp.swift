@@ -11,6 +11,8 @@ struct WarboardIOSApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var prefs: PrefsStore
     @StateObject private var chainTicker: ChainTickerViewModel
+    @StateObject private var barReporter = BarReporter()
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         let p = PrefsStore()
@@ -20,21 +22,25 @@ struct WarboardIOSApp: App {
 
     var body: some Scene {
         WindowGroup {
-            // AuthGateView wraps ContentView — locks every tab
-            // (including Status / chain bar that hits Torn directly)
-            // when /api/auth returns 403. Without this, a non-DF
-            // member could install the app and at least see their
-            // own personal Torn data via the Status tab.
             AuthGateView()
                 .environmentObject(prefs)
                 .environmentObject(chainTicker)
                 .task {
-                    // Always-on chain poller — feeds the Live Activity
-                    // even when no war is active, so users see the
-                    // chain countdown in the Dynamic Island anytime
-                    // the faction is mid-chain. Also drives the Status
-                    // tab's Chain bar.
                     chainTicker.start()
+                    barReporter.bind(prefs: prefs)
+                    barReporter.start()
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    // Pause the bar reporter when the app is
+                    // backgrounded so we're not burning the user's
+                    // Torn API budget while they're not looking,
+                    // and resume on .active so any tab being open
+                    // keeps the faction's Members view fresh.
+                    if phase == .active {
+                        barReporter.start()
+                    } else {
+                        barReporter.stop()
+                    }
                 }
         }
     }
