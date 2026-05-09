@@ -192,13 +192,21 @@ final class ChainLiveActivityController {
             do {
                 startedActivity = try Activity<ChainActivityAttributes>.request(
                     attributes: attrs, content: content, pushType: .token)
+                Self.diag(baseUrl: baseUrl, tag: "la-request-token-ok",
+                          payload: ["warId": warId])
             } catch {
                 NSLog("[Warboard] Live Activity push-token request failed (\(error.localizedDescription)); falling back to local-only.")
+                Self.diag(baseUrl: baseUrl, tag: "la-request-token-failed",
+                          payload: ["warId": warId, "error": error.localizedDescription])
                 do {
                     startedActivity = try Activity<ChainActivityAttributes>.request(
                         attributes: attrs, content: content, pushType: nil)
+                    Self.diag(baseUrl: baseUrl, tag: "la-request-nil-ok",
+                              payload: ["warId": warId])
                 } catch {
                     NSLog("[Warboard] Live Activity local-only request also failed: \(error.localizedDescription)")
+                    Self.diag(baseUrl: baseUrl, tag: "la-request-nil-failed",
+                              payload: ["warId": warId, "error": error.localizedDescription])
                 }
             }
             if let activity = startedActivity {
@@ -224,18 +232,47 @@ final class ChainLiveActivityController {
     private func makePushTokenWatcher(activity: Activity<ChainActivityAttributes>,
                                       baseUrl: String,
                                       jwt: String) -> Task<Void, Never>? {
+        // v0.4.49 diagnostic: emit a server-side log line on every step
+        // so we can see WHERE the registration pipeline is breaking on
+        // iOS 26 devices. Removed once we've confirmed the path works.
+        Self.diag(baseUrl: baseUrl, tag: "la-watcher-make",
+                  payload: ["baseUrlEmpty": baseUrl.isEmpty, "jwtEmpty": jwt.isEmpty,
+                            "warId": activity.attributes.warId])
         guard !baseUrl.isEmpty, !jwt.isEmpty else { return nil }
         let warId = activity.attributes.warId
         return Task { [weak self] in
+            Self.diag(baseUrl: baseUrl, tag: "la-watcher-start",
+                      payload: ["warId": warId])
+            var iterations = 0
             for await tokenData in activity.pushTokenUpdates {
-                if Task.isCancelled { return }
+                iterations += 1
+                Self.diag(baseUrl: baseUrl, tag: "la-token-yielded",
+                          payload: ["warId": warId, "tokenLen": tokenData.count, "iter": iterations])
+                if Task.isCancelled {
+                    Self.diag(baseUrl: baseUrl, tag: "la-watcher-cancelled", payload: ["warId": warId])
+                    return
+                }
                 let hex = tokenData.map { String(format: "%02x", $0) }.joined()
                 await Self.postLiveActivitySubscribe(baseUrl: baseUrl, jwt: jwt, warId: warId, token: hex)
                 await MainActor.run {
                     self?.lastRegistration = (warId: warId, baseUrl: baseUrl, jwt: jwt)
                 }
             }
+            Self.diag(baseUrl: baseUrl, tag: "la-watcher-loop-exit",
+                      payload: ["warId": warId, "iterations": iterations])
         }
+    }
+
+    /// Fire-and-forget diagnostic POST to /api/debug/client-log so we
+    /// can correlate iOS Live Activity registration steps in pm2 logs.
+    /// Keeps it best-effort — a failed diag POST never blocks anything.
+    private static func diag(baseUrl: String, tag: String, payload: [String: Any]) {
+        guard let url = URL(string: baseUrl.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/api/debug/client-log") else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["tag": tag, "data": payload])
+        Task { _ = try? await URLSession.shared.data(for: req) }
     }
 
     /// POST the activity push token to the server. Best-effort —
