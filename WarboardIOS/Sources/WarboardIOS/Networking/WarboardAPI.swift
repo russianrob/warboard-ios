@@ -744,6 +744,28 @@ enum WarboardAPI {
             )
         }
 
+        var xanax: PostWarReport.XanaxAccountability?
+        if let xa = r["xanaxAccountability"] as? [String: Any] {
+            let rows = ((xa["rows"] as? [[String: Any]]) ?? []).map { row in
+                PostWarReport.XanaxAccountability.Row(
+                    id: str(row["id"]),
+                    name: str(row["name"]),
+                    xanaxTaken: int(row["xanaxTaken"]),
+                    attacks: int(row["attacks"]),
+                    expectedAttacks: int(row["expectedAttacks"]),
+                    attackDeficit: int(row["attackDeficit"]),
+                    flagged: (row["flagged"] as? Bool) ?? false
+                )
+            }
+            xanax = .init(
+                totalXanaxTaken: int(xa["totalXanaxTaken"]),
+                membersWhoTook: int(xa["membersWhoTook"]),
+                membersFlagged: int(xa["membersFlagged"]),
+                rule: str(xa["rule"]),
+                rows: rows
+            )
+        }
+
         return PostWarReport(
             warSummary: summary,
             factionPerformance: perf,
@@ -751,7 +773,8 @@ enum WarboardAPI {
             positiveHighlights: positive,
             negativeHighlights: negative,
             recommendations: recs,
-            memberTable: table
+            memberTable: table,
+            xanaxAccountability: xanax
         )
     }
 

@@ -13,6 +13,7 @@ struct PostWarReport {
     let negativeHighlights: NegativeHighlights?
     let recommendations: [Recommendation]
     let memberTable: [MemberRow]
+    let xanaxAccountability: XanaxAccountability?
 
     struct WarSummary {
         let result: String          // "VICTORY" | "DEFEAT" | "UNKNOWN"
@@ -94,5 +95,26 @@ struct PostWarReport {
         let respectBled: Double
         let netScore: Double
         let efficiencyPct: Int
+    }
+
+    /// Per-member xanax accountability — who took xanax during the
+    /// 24h pre-war + war window and whether their attack count met
+    /// the 1 xanax = 10 attacks expectation.
+    struct XanaxAccountability {
+        let totalXanaxTaken: Int
+        let membersWhoTook: Int
+        let membersFlagged: Int
+        let rule: String
+        let rows: [Row]
+
+        struct Row: Identifiable {
+            let id: String      // playerId
+            let name: String
+            let xanaxTaken: Int
+            let attacks: Int
+            let expectedAttacks: Int
+            let attackDeficit: Int
+            let flagged: Bool
+        }
     }
 }

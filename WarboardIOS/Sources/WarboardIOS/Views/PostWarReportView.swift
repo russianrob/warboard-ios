@@ -54,6 +54,11 @@ struct PostWarReportView: View {
                             }
                         }
                     }
+                    if let xa = report.xanaxAccountability, xa.membersWhoTook > 0 {
+                        Section_(title: "Xanax Accountability") {
+                            XanaxAccountabilitySection(xa: xa)
+                        }
+                    }
                     Section_(title: "Member Performance", initiallyCollapsed: true) {
                         MemberTable(rows: report.memberTable)
                     }
@@ -387,5 +392,96 @@ private func statGrid(_ rows: [(String, String?)],
                 }
             }
         }
+    }
+}
+
+// MARK: – Xanax Accountability
+
+/// Renders the per-member xanax-vs-attacks accountability table from
+/// the post-war report. The server's xanaxAccountability block already
+/// sorts rows by deficit DESC, so flagged outliers naturally float to
+/// the top. Each row shows xanax taken, actual attacks, expected (×10)
+/// and the deficit; flagged rows get a red ⚠ marker.
+private struct XanaxAccountabilitySection: View {
+    let xa: PostWarReport.XanaxAccountability
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Summary chips
+            HStack(spacing: 8) {
+                Chip(label: "\(xa.totalXanaxTaken) total", color: .secondary)
+                Chip(label: "\(xa.membersWhoTook) members", color: .secondary)
+                if xa.membersFlagged > 0 {
+                    Chip(label: "\(xa.membersFlagged) flagged", color: .red)
+                } else {
+                    Chip(label: "0 flagged", color: .green)
+                }
+            }
+            // Rule context — small caption so the math is transparent
+            Text(xa.rule)
+                .font(.caption2).foregroundStyle(.secondary)
+                .padding(.bottom, 4)
+            // Rows — flagged first (server already sorts), then the rest
+            VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Text("Member").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                    Spacer()
+                    Text("X").frame(width: 28, alignment: .trailing)
+                        .font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                    Text("Atk").frame(width: 40, alignment: .trailing)
+                        .font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                    Text("Need").frame(width: 40, alignment: .trailing)
+                        .font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                    Text("Δ").frame(width: 40, alignment: .trailing)
+                        .font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .background(Color.gray.opacity(0.08))
+                ForEach(xa.rows) { row in
+                    HStack {
+                        if row.flagged {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.caption2).foregroundColor(.red)
+                        } else {
+                            Image(systemName: "checkmark")
+                                .font(.caption2).foregroundColor(.green)
+                        }
+                        Text(row.name).font(.caption.monospacedDigit())
+                            .lineLimit(1).truncationMode(.tail)
+                        Spacer()
+                        Text("\(row.xanaxTaken)")
+                            .font(.caption.monospacedDigit())
+                            .frame(width: 28, alignment: .trailing)
+                        Text("\(row.attacks)")
+                            .font(.caption.monospacedDigit())
+                            .frame(width: 40, alignment: .trailing)
+                        Text("\(row.expectedAttacks)")
+                            .font(.caption.monospacedDigit().weight(.light))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 40, alignment: .trailing)
+                        Text(row.attackDeficit > 0 ? "-\(row.attackDeficit)" : "—")
+                            .font(.caption.monospacedDigit().weight(row.flagged ? .semibold : .regular))
+                            .foregroundColor(row.flagged ? .red : .secondary)
+                            .frame(width: 40, alignment: .trailing)
+                    }
+                    .padding(.horizontal, 8).padding(.vertical, 6)
+                    .background(row.flagged ? Color.red.opacity(0.06) : Color.clear)
+                }
+            }
+            .background(RoundedRectangle(cornerRadius: 8).stroke(Color.gray.opacity(0.2)))
+        }
+    }
+}
+
+private struct Chip: View {
+    let label: String
+    let color: Color
+    var body: some View {
+        Text(label)
+            .font(.caption2.weight(.medium))
+            .foregroundColor(color)
+            .padding(.horizontal, 8).padding(.vertical, 3)
+            .background(color.opacity(0.15), in: Capsule())
     }
 }
