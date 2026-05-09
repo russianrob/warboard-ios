@@ -839,6 +839,29 @@ enum WarboardAPI {
         } catch { return false }
     }
 
+    /// POST /api/me/attacks — push our last-100 fight history so the
+    /// server can ingest per-attack telemetry for the active war
+    /// (mug $, modifiers, defends — data the faction attacks-feed
+    /// doesn't expose). Server attributes each fight to the correct
+    /// war by faction + timestamp window and dedupes by fight ID.
+    @discardableResult
+    static func reportMyAttacks(
+        baseUrl: String, jwt: String, attacks: [String: Any]
+    ) async -> Bool {
+        guard !attacks.isEmpty,
+              let url = URL(string: baseUrl.trimmedSlash + "/api/me/attacks")
+        else { return false }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["attacks": attacks])
+        do {
+            let (_, resp) = try await URLSession.shared.data(for: req)
+            return (resp as? HTTPURLResponse)?.statusCode == 200
+        } catch { return false }
+    }
+
     /// POST /api/call — call/uncall an enemy in the war room.
     /// `isDeal=true` places a multi-hit "deal" call (15-min timeout)
     /// instead of the standard call. Server-side the only difference

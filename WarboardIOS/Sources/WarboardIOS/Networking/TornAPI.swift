@@ -109,6 +109,22 @@ enum TornAPI {
         }
     }
 
+    /// `/user/?selections=attacks` (v1) — last-100 fights involving the
+    /// user (attacks AND defends). Returned as the raw `attacks` map so
+    /// the caller can POST it through to warboard untouched (the server
+    /// does the parsing + dedupe). Returns an empty dict on error so
+    /// reporters never crash on transient failures.
+    static func fetchMyAttacks(apiKey: String) async -> [String: Any] {
+        guard !apiKey.isEmpty,
+              let url = URL(string: "\(base)/user/?selections=attacks&key=\(apiKey)")
+        else { return [:] }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+            return root["attacks"] as? [String: Any] ?? [:]
+        } catch { return [:] }
+    }
+
     private static func parseDashboard(_ root: [String: Any]) -> DashboardSnapshot {
         // v1 puts each bar at root level — energy / nerve / happy / life
         // are top-level keys, NOT under a "bars" wrapper. Earlier code

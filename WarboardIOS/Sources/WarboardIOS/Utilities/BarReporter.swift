@@ -40,9 +40,21 @@ final class BarReporter: ObservableObject {
     private func tick() async {
         guard let prefs = prefs, !prefs.apiKey.isEmpty else { return }
         guard let auth = auth, let a = await auth.ensureAuth() else { return }
-        guard let snap = await TornAPI.fetchDashboard(apiKey: prefs.apiKey),
-              snap.error == nil
-        else { return }
-        await WarboardAPI.reportMyBars(baseUrl: prefs.baseUrl, jwt: a.token, snap: snap)
+
+        // Run the bars + attacks fetches concurrently — they're both
+        // independent Torn calls on the user's own key, no reason to
+        // serialize. attacks is best-effort: if the call fails or there
+        // are no fights, we still want bars to push.
+        async let snapTask = TornAPI.fetchDashboard(apiKey: prefs.apiKey)
+        async let attacksTask = TornAPI.fetchMyAttacks(apiKey: prefs.apiKey)
+        let snap = await snapTask
+        let attacks = await attacksTask
+
+        if let snap = snap, snap.error == nil {
+            await WarboardAPI.reportMyBars(baseUrl: prefs.baseUrl, jwt: a.token, snap: snap)
+        }
+        if !attacks.isEmpty {
+            await WarboardAPI.reportMyAttacks(baseUrl: prefs.baseUrl, jwt: a.token, attacks: attacks)
+        }
     }
 }
