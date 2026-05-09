@@ -14,7 +14,7 @@ packages:
 
 settings:
   base:
-    MARKETING_VERSION: "0.4.46"
+    MARKETING_VERSION: "0.4.47"
     CURRENT_PROJECT_VERSION: "1"
     DEVELOPMENT_TEAM: "DAD59U75G9"
     CODE_SIGN_STYLE: Manual
@@ -47,6 +47,17 @@ targets:
         DEVELOPMENT_TEAM: "DAD59U75G9"
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: "Apple Distribution"
+        # APNs Live Activity push entitlement. The matching aps-environment
+        # capability is enabled on the com.tornwar.warboard App ID and
+        # baked into the "Warboard App Store" provisioning profile (UUID
+        # 7a52a18f-821c-4f8f-b027-40df4fe5dc55, regenerated 2026-05-09)
+        # which the CI workflow installs from the
+        # IOS_PROVISIONING_PROFILE_BASE64 secret. Without this entitlement
+        # file the activity request falls back to pushType: nil (handled
+        # by the controller's catch block); with it, the activity gets a
+        # real push token that the warboard server uses to fan out chain
+        # updates to backgrounded devices.
+        CODE_SIGN_ENTITLEMENTS: WarboardIOS/Resources/Warboard.entitlements
     info:
       path: WarboardIOS/Resources/Info.plist
       properties:
