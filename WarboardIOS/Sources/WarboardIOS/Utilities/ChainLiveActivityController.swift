@@ -179,6 +179,26 @@ final class ChainLiveActivityController {
            active.attributes.warId == warId,
            active.activityState == .active {
             Task { await active.update(ActivityContent(state: state, staleDate: nil)) }
+            // v0.4.50: also (re-)POST the current push token here. Without
+            // this the iOS app only registers in the "create new activity"
+            // branch — meaning if the server forgets the token (storage
+            // wipe, restart, etc.) the app never re-registers it for the
+            // existing activity, and APNs pushes go to a server that has
+            // no record. Idempotent on server side (upsert).
+            if #available(iOS 16.2, *) {
+                if pushTokenTask == nil || pushTokenTask?.isCancelled == true {
+                    pushTokenTask = makePushTokenWatcher(activity: active, baseUrl: baseUrl, jwt: jwt)
+                }
+                // Even if the watcher is already running (it'll re-yield on
+                // next token rotation), opportunistically read the current
+                // pushToken sync and POST it now so the server doesn't have
+                // to wait for a rotation event that may never come.
+                if let tokenData = active.pushToken {
+                    let hex = tokenData.map { String(format: "%02x", $0) }.joined()
+                    let bu = baseUrl, jw = jwt, wid = warId
+                    Task { await Self.postLiveActivitySubscribe(baseUrl: bu, jwt: jw, warId: wid, token: hex) }
+                }
+            }
         } else {
             // Try .token first (APNs push fanout from the warboard server,
             // works while backgrounded/terminated). If that throws — most
