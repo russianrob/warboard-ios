@@ -17,9 +17,23 @@ final class ChainLiveActivityController {
         // on the lock screen indefinitely because our `current`
         // reference is nil → the chain==0 branch's `if let active`
         // guard is false → no end call ever fires.
+        //
+        // BUT: if the adopted activity was created with pushType: nil
+        // (older app version, or the .token request failed and fell back),
+        // it has no push token and can never receive APNs Live Activity
+        // updates. End it immediately so the next sync() call creates a
+        // fresh activity with pushType: .token. iOS exposes
+        // `activity.pushToken` (singular, iOS 16.1) which is nil for
+        // .nil-pushType activities and Data for .token activities.
         if #available(iOS 16.1, *) {
             for a in Activity<ChainActivityAttributes>.activities
             where a.activityState == .active {
+                if a.pushToken == nil {
+                    // Stale .nil-pushType activity from an older build.
+                    // End it without adopting; next sync() creates fresh.
+                    Task { await a.end(nil, dismissalPolicy: .immediate) }
+                    continue
+                }
                 current = a
                 break
             }

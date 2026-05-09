@@ -14,7 +14,7 @@ packages:
 
 settings:
   base:
-    MARKETING_VERSION: "0.4.47"
+    MARKETING_VERSION: "0.4.48"
     CURRENT_PROJECT_VERSION: "1"
     DEVELOPMENT_TEAM: "DAD59U75G9"
     CODE_SIGN_STYLE: Manual
