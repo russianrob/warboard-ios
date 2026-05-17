@@ -17,6 +17,10 @@ final class PrefsStore: ObservableObject {
     private static let kNotifyVault = "warboard.notify.vault"
     private static let kMenuBarChain = "warboard.menubar.chain"
     private static let kLinkOpenInApp = "warboard.linkOpenInApp"
+    private static let kStatsFilterMin = "warboard.statsFilterMin"
+    private static let kStatsFilterMax = "warboard.statsFilterMax"
+    private static let kHideOnline = "warboard.hideOnline"
+    private static let kHideOffline = "warboard.hideOffline"
 
     @Published var apiKey: String { didSet { defaults.set(apiKey, forKey: Self.kApiKey) } }
     @Published var baseUrl: String { didSet { defaults.set(baseUrl, forKey: Self.kBaseUrl) } }
@@ -31,6 +35,14 @@ final class PrefsStore: ObservableObject {
     /// ON so the user stays in the app — the Safari sheet's close button
     /// drops them back instantly without a tab-switch round trip.
     @Published var linkOpenInApp: Bool { didSet { defaults.set(linkOpenInApp, forKey: Self.kLinkOpenInApp) } }
+    /// Target-list filters — mirror the FactionOps userscript v5.1.1
+    /// (stats min/max) + v5.1.5 (hide online) + v5.1.12 (hide offline).
+    /// Stats fields are stored as raw text so the user's "10M" / "1.5B"
+    /// input round-trips through the text field; parsed at filter time.
+    @Published var statsFilterMin: String { didSet { defaults.set(statsFilterMin, forKey: Self.kStatsFilterMin) } }
+    @Published var statsFilterMax: String { didSet { defaults.set(statsFilterMax, forKey: Self.kStatsFilterMax) } }
+    @Published var hideOnline: Bool { didSet { defaults.set(hideOnline, forKey: Self.kHideOnline) } }
+    @Published var hideOffline: Bool { didSet { defaults.set(hideOffline, forKey: Self.kHideOffline) } }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -42,6 +54,10 @@ final class PrefsStore: ObservableObject {
         self.notifyVault = defaults.object(forKey: Self.kNotifyVault) as? Bool ?? true
         self.menuBarChain = defaults.object(forKey: Self.kMenuBarChain) as? Bool ?? true
         self.linkOpenInApp = defaults.object(forKey: Self.kLinkOpenInApp) as? Bool ?? true
+        self.statsFilterMin = defaults.string(forKey: Self.kStatsFilterMin) ?? ""
+        self.statsFilterMax = defaults.string(forKey: Self.kStatsFilterMax) ?? ""
+        self.hideOnline = defaults.object(forKey: Self.kHideOnline) as? Bool ?? false
+        self.hideOffline = defaults.object(forKey: Self.kHideOffline) as? Bool ?? false
     }
 
     // JWT cache helpers — accessed by AuthRepository, not the UI.

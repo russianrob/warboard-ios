@@ -325,6 +325,7 @@ private struct WarTimerRow: View {
 }
 
 private struct TargetList: View {
+    @EnvironmentObject private var prefs: PrefsStore
     let war: WarSnapshot
     let nowMs: Int64
     let enemyStats: [String: Int64]
@@ -382,56 +383,89 @@ private struct TargetList: View {
             if lhs.releaseAtMs != rhs.releaseAtMs { return lhs.releaseAtMs < rhs.releaseAtMs }
             return lhs.id < rhs.id
         }
-        List {
-            if !nextUp.isEmpty {
-                Section {
-                    ForEach(Array(nextUp)) { t in
-                        TargetRow(target: t,
-                                  stats: enemyStats[t.id],
-                                  travel: travelInfo[t.id],
-                                  nowMs: nowMs,
-                                  onCall: onCall, onUncall: onUncall, onDeal: onDeal)
-                            .listRowSeparator(.hidden)
-                    }
-                } header: {
-                    Text("Next up — top \(nextUp.count)")
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(.accentColor)
-                        .textCase(nil)
+        // Apply user filters (stats range, hide online/offline) — mirrors
+        // FactionOps userscript v5.1.1 / v5.1.5 / v5.1.12. Filters apply
+        // only to non-hospital rows in `rest` so the Next-Up section
+        // (curated countdown queue) stays exempt; hospital rows in `rest`
+        // are also exempt from the activity filter because "online" /
+        // "offline" doesn't meaningfully describe a hospitalized target.
+        let minStats = parseStatInput(prefs.statsFilterMin)
+        let maxStats = parseStatInput(prefs.statsFilterMax)
+        var hiddenByStats = 0
+        var hiddenByOnline = 0
+        var hiddenByOffline = 0
+        let filteredRest = sortedRest.filter { t in
+            if let stats = enemyStats[t.id] {
+                if let mn = minStats, stats < mn { hiddenByStats += 1; return false }
+                if let mx = maxStats, stats > mx { hiddenByStats += 1; return false }
+            }
+            let isHospital = t.status.lowercased() == "hospital"
+            if !isHospital {
+                let activity = (t.activity ?? "").lowercased()
+                if prefs.hideOnline && activity == "online" {
+                    hiddenByOnline += 1; return false
                 }
-                Section {
-                    ForEach(sortedRest) { t in
-                        TargetRow(target: t,
-                                  stats: enemyStats[t.id],
-                                  travel: travelInfo[t.id],
-                                  nowMs: nowMs,
-                                  onCall: onCall, onUncall: onUncall, onDeal: onDeal)
-                            .listRowSeparator(.hidden)
-                    }
-                } header: {
-                    Text("All targets")
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(.accentColor)
-                        .textCase(nil)
-                }
-            } else {
-                ForEach(sortedRest) { t in
-                    TargetRow(target: t,
-                              stats: enemyStats[t.id],
-                              travel: travelInfo[t.id],
-                              nowMs: nowMs,
-                              onCall: onCall, onUncall: onUncall, onDeal: onDeal)
-                        .listRowSeparator(.hidden)
+                if prefs.hideOffline && activity != "online" {
+                    hiddenByOffline += 1; return false
                 }
             }
+            return true
         }
-        .listStyle(.plain)
-        // Belt-and-suspenders: even with stable IDs + sort, disable any
-        // implicit list animations driven by per-second nowMs ticks.
-        // SwiftUI's default List animation otherwise re-runs on each
-        // body re-eval whenever the (sorted) array reference changes,
-        // which is every second.
-        .animation(nil, value: nowMs)
+        VStack(spacing: 0) {
+            FilterBar(hiddenByStats: hiddenByStats,
+                      hiddenByOnline: hiddenByOnline,
+                      hiddenByOffline: hiddenByOffline)
+            List {
+                if !nextUp.isEmpty {
+                    Section {
+                        ForEach(Array(nextUp)) { t in
+                            TargetRow(target: t,
+                                      stats: enemyStats[t.id],
+                                      travel: travelInfo[t.id],
+                                      nowMs: nowMs,
+                                      onCall: onCall, onUncall: onUncall, onDeal: onDeal)
+                                .listRowSeparator(.hidden)
+                        }
+                    } header: {
+                        Text("Next up — top \(nextUp.count)")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.accentColor)
+                            .textCase(nil)
+                    }
+                    Section {
+                        ForEach(filteredRest) { t in
+                            TargetRow(target: t,
+                                      stats: enemyStats[t.id],
+                                      travel: travelInfo[t.id],
+                                      nowMs: nowMs,
+                                      onCall: onCall, onUncall: onUncall, onDeal: onDeal)
+                                .listRowSeparator(.hidden)
+                        }
+                    } header: {
+                        Text("All targets")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.accentColor)
+                            .textCase(nil)
+                    }
+                } else {
+                    ForEach(filteredRest) { t in
+                        TargetRow(target: t,
+                                  stats: enemyStats[t.id],
+                                  travel: travelInfo[t.id],
+                                  nowMs: nowMs,
+                                  onCall: onCall, onUncall: onUncall, onDeal: onDeal)
+                            .listRowSeparator(.hidden)
+                    }
+                }
+            }
+            .listStyle(.plain)
+            // Belt-and-suspenders: even with stable IDs + sort, disable
+            // any implicit list animations driven by per-second nowMs
+            // ticks. SwiftUI's default List animation otherwise re-runs
+            // on each body re-eval whenever the (sorted) array reference
+            // changes, which is every second.
+            .animation(nil, value: nowMs)
+        }
     }
 
     /// Sort priority — called targets pinned to the very top (you're
@@ -449,6 +483,85 @@ private struct TargetList: View {
         case "federal", "fallen":   return 7.0
         default:                    return 6.0
         }
+    }
+}
+
+/// Compact filter bar above the target list — two stat range fields, a
+/// clear button, and two activity toggles. Mirrors the FactionOps
+/// userscript v5.1.1 / v5.1.5 / v5.1.12 controls. Hidden counts surface
+/// in orange to the right of the toggles so the user knows when a
+/// filter is silently dropping rows.
+private struct FilterBar: View {
+    @EnvironmentObject private var prefs: PrefsStore
+    let hiddenByStats: Int
+    let hiddenByOnline: Int
+    let hiddenByOffline: Int
+
+    private var hiddenSummary: String {
+        var parts: [String] = []
+        if hiddenByStats   > 0 { parts.append("\(hiddenByStats) by stats") }
+        if hiddenByOnline  > 0 { parts.append("\(hiddenByOnline) online") }
+        if hiddenByOffline > 0 { parts.append("\(hiddenByOffline) offline") }
+        return parts.isEmpty ? "" : "(" + parts.joined(separator: " + ") + " hidden)"
+    }
+
+    private var anyFilterActive: Bool {
+        !prefs.statsFilterMin.isEmpty || !prefs.statsFilterMax.isEmpty ||
+        prefs.hideOnline || prefs.hideOffline
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Text("Stats:")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                TextField("min", text: $prefs.statsFilterMin)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 70)
+                    .font(.caption)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                Text("–").foregroundStyle(.secondary)
+                TextField("max", text: $prefs.statsFilterMax)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 70)
+                    .font(.caption)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                Button {
+                    prefs.statsFilterMin = ""
+                    prefs.statsFilterMax = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.tertiary)
+                }
+                .buttonStyle(.plain)
+                .opacity(prefs.statsFilterMin.isEmpty && prefs.statsFilterMax.isEmpty ? 0.3 : 1)
+                Spacer(minLength: 0)
+            }
+            HStack(spacing: 8) {
+                Toggle("Hide online", isOn: $prefs.hideOnline)
+                    .toggleStyle(.button)
+                    .controlSize(.small)
+                    .font(.caption)
+                Toggle("Hide offline", isOn: $prefs.hideOffline)
+                    .toggleStyle(.button)
+                    .controlSize(.small)
+                    .font(.caption)
+                if !hiddenSummary.isEmpty {
+                    Text(hiddenSummary)
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color(.systemBackground))
     }
 }
 
