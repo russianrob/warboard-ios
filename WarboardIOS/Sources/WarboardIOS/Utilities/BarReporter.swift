@@ -57,15 +57,31 @@ final class BarReporter: ObservableObject {
             // cooldowns we just pushed to the server. WidgetCenter
             // reload happens inside BarsCache.write.
             let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+            let drugDl    = snap.drugSeconds > 0    ? nowMs + Int64(snap.drugSeconds) * 1000    : 0
+            let boosterDl = snap.boosterSeconds > 0 ? nowMs + Int64(snap.boosterSeconds) * 1000 : 0
             BarsCache.write(BarsCache.Snapshot(
                 energyCurrent: snap.energy.current,
                 energyMax:     snap.energy.maximum,
                 nerveCurrent:  snap.nerve.current,
                 nerveMax:      snap.nerve.maximum,
-                drugDeadlineMs:    snap.drugSeconds > 0    ? nowMs + Int64(snap.drugSeconds) * 1000    : 0,
-                boosterDeadlineMs: snap.boosterSeconds > 0 ? nowMs + Int64(snap.boosterSeconds) * 1000 : 0,
+                drugDeadlineMs:    drugDl,
+                boosterDeadlineMs: boosterDl,
                 writtenAtMs: nowMs
             ))
+            // Also push the bars into the chain Live Activity if one
+            // is active — gives the lock-screen / Dynamic Island a
+            // near-real-time bars surface during war without paying
+            // for a separate APNs push round trip.
+            if #available(iOS 16.1, *) {
+                ChainLiveActivityController.shared.updateBars(
+                    energyCurrent: snap.energy.current,
+                    energyMax:     snap.energy.maximum,
+                    nerveCurrent:  snap.nerve.current,
+                    nerveMax:      snap.nerve.maximum,
+                    drugDeadlineMs:    drugDl,
+                    boosterDeadlineMs: boosterDl
+                )
+            }
         }
         if !attacks.isEmpty {
             await WarboardAPI.reportMyAttacks(baseUrl: prefs.baseUrl, jwt: a.token, attacks: attacks)

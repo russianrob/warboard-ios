@@ -111,41 +111,51 @@ private struct LockScreenChainView: View {
     let attrs: ChainActivityAttributes
 
     var body: some View {
-        HStack(spacing: 14) {
-            Image(systemName: "link.circle.fill")
-                .font(.system(size: 30))
-                .foregroundColor(.orange)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text("Chain \(state.chain)")
-                        .font(.subheadline.bold())
-                    Text("vs \(attrs.enemyName)")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                if isDeadlineLive(state.timeoutDeadlineMs) {
-                    HStack(spacing: 4) {
-                        Text("breaks in")
-                            .font(.caption2).foregroundStyle(.secondary)
-                        Text(timerInterval: Date()...Date(timeIntervalSince1970: TimeInterval(state.timeoutDeadlineMs) / 1000),
-                             countsDown: true)
-                            .font(.caption.bold().monospacedDigit())
-                            .foregroundColor(urgencyColor(state.timeoutDeadlineMs))
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 14) {
+                Image(systemName: "link.circle.fill")
+                    .font(.system(size: 28))
+                    .foregroundColor(.orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text("Chain \(state.chain)")
+                            .font(.subheadline.bold())
+                        Text("vs \(attrs.enemyName)")
+                            .font(.caption).foregroundStyle(.secondary)
                     }
-                } else if isDeadlineLive(state.cooldownDeadlineMs) {
-                    HStack(spacing: 4) {
-                        Text("cooldown")
-                            .font(.caption2).foregroundStyle(.secondary)
-                        Text(timerInterval: Date()...Date(timeIntervalSince1970: TimeInterval(state.cooldownDeadlineMs) / 1000),
-                             countsDown: true)
-                            .font(.caption.bold().monospacedDigit())
-                            .foregroundColor(.secondary)
+                    if isDeadlineLive(state.timeoutDeadlineMs) {
+                        HStack(spacing: 4) {
+                            Text("breaks in")
+                                .font(.caption2).foregroundStyle(.secondary)
+                            Text(timerInterval: Date()...Date(timeIntervalSince1970: TimeInterval(state.timeoutDeadlineMs) / 1000),
+                                 countsDown: true)
+                                .font(.caption.bold().monospacedDigit())
+                                .foregroundColor(urgencyColor(state.timeoutDeadlineMs))
+                        }
+                    } else if isDeadlineLive(state.cooldownDeadlineMs) {
+                        HStack(spacing: 4) {
+                            Text("cooldown")
+                                .font(.caption2).foregroundStyle(.secondary)
+                            Text(timerInterval: Date()...Date(timeIntervalSince1970: TimeInterval(state.cooldownDeadlineMs) / 1000),
+                                 countsDown: true)
+                                .font(.caption.bold().monospacedDigit())
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
+                Spacer()
+                Text("\(state.myScore)–\(state.enemyScore)")
+                    .font(.caption.bold().monospacedDigit())
+                    .foregroundStyle(.secondary)
             }
-            Spacer()
-            Text("\(state.myScore)–\(state.enemyScore)")
-                .font(.caption.bold().monospacedDigit())
-                .foregroundStyle(.secondary)
+            // v0.4.61: bars + cooldowns embedded under the chain row.
+            // Only shown when the BarReporter has pushed values at
+            // least once (energyMax > 0). During war we get pushed
+            // every 60s from BarReporter while app is foregrounded.
+            if state.energyMax > 0 || state.nerveMax > 0
+                || state.drugDeadlineMs > 0 || state.boosterDeadlineMs > 0 {
+                BarsStripView(state: state)
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -162,5 +172,97 @@ private struct LockScreenChainView: View {
         if remainingSec <= 30 { return .red }
         if remainingSec <= 60 { return .orange }
         return .green
+    }
+}
+
+/// v0.4.61: compact Energy/Nerve mini-bars + Drug/Booster cooldown
+/// chips, shown beneath the chain row in the lock-screen Live Activity
+/// presentation. Uses absolute deadlines so countdowns stay accurate
+/// even when iOS reads a cached snapshot minutes after the last push.
+private struct BarsStripView: View {
+    let state: ChainActivityAttributes.ContentState
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if state.energyMax > 0 {
+                MiniBar(label: "E",
+                        current: state.energyCurrent,
+                        max: state.energyMax,
+                        color: Color(red: 0.13, green: 0.83, blue: 0.94))
+            }
+            if state.nerveMax > 0 {
+                MiniBar(label: "N",
+                        current: state.nerveCurrent,
+                        max: state.nerveMax,
+                        color: .red)
+            }
+            if state.drugDeadlineMs > Int64(Date().timeIntervalSince1970 * 1000) {
+                CooldownChip(label: "Drug",
+                             deadlineMs: state.drugDeadlineMs,
+                             tint: .purple)
+            }
+            if state.boosterDeadlineMs > Int64(Date().timeIntervalSince1970 * 1000) {
+                CooldownChip(label: "Boost",
+                             deadlineMs: state.boosterDeadlineMs,
+                             tint: .green)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+private struct MiniBar: View {
+    let label: String
+    let current: Int
+    let max: Int
+    let color: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            HStack(spacing: 3) {
+                Text(label)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Text("\(current)/\(max)")
+                    .font(.system(size: 9, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(.primary)
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(color.opacity(0.18))
+                    Capsule().fill(color)
+                        .frame(width: geo.size.width * fillFraction)
+                }
+            }
+            .frame(height: 4)
+        }
+        .frame(minWidth: 56, maxWidth: 80)
+    }
+
+    private var fillFraction: Double {
+        guard max > 0 else { return 0 }
+        return min(1.0, Double(current) / Double(max))
+    }
+}
+
+private struct CooldownChip: View {
+    let label: String
+    let deadlineMs: Int64
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Circle().fill(tint).frame(width: 5, height: 5)
+            Text(label)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.secondary)
+            Text(timerInterval: Date()...Date(timeIntervalSince1970: TimeInterval(deadlineMs) / 1000),
+                 countsDown: true)
+                .font(.system(size: 9, weight: .semibold).monospacedDigit())
+                .foregroundStyle(tint)
+        }
+        .padding(.horizontal, 5)
+        .padding(.vertical, 2)
+        .background(Capsule().fill(tint.opacity(0.12)))
     }
 }

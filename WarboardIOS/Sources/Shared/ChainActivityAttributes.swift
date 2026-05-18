@@ -27,17 +27,42 @@ struct ChainActivityAttributes: ActivityAttributes {
         public let myScore: Int
         /// Live enemy faction score.
         public let enemyScore: Int
+        /// v0.4.61: personal status bars + cooldowns embedded into the
+        /// Live Activity so the lock-screen/Dynamic-Island surface acts
+        /// as a near-real-time status panel during war. Fields are
+        /// optional (default to 0) so older push payloads without these
+        /// fields keep decoding cleanly.
+        public var energyCurrent: Int = 0
+        public var energyMax: Int = 0
+        public var nerveCurrent: Int = 0
+        public var nerveMax: Int = 0
+        /// Absolute epoch-ms deadlines so countdowns stay accurate even
+        /// when the activity is read minutes after the push lands.
+        public var drugDeadlineMs: Int64 = 0
+        public var boosterDeadlineMs: Int64 = 0
 
         public init(chain: Int,
                     timeoutDeadlineMs: Int64,
                     cooldownDeadlineMs: Int64,
                     myScore: Int,
-                    enemyScore: Int) {
+                    enemyScore: Int,
+                    energyCurrent: Int = 0,
+                    energyMax: Int = 0,
+                    nerveCurrent: Int = 0,
+                    nerveMax: Int = 0,
+                    drugDeadlineMs: Int64 = 0,
+                    boosterDeadlineMs: Int64 = 0) {
             self.chain = chain
             self.timeoutDeadlineMs = timeoutDeadlineMs
             self.cooldownDeadlineMs = cooldownDeadlineMs
             self.myScore = myScore
             self.enemyScore = enemyScore
+            self.energyCurrent = energyCurrent
+            self.energyMax = energyMax
+            self.nerveCurrent = nerveCurrent
+            self.nerveMax = nerveMax
+            self.drugDeadlineMs = drugDeadlineMs
+            self.boosterDeadlineMs = boosterDeadlineMs
         }
     }
 

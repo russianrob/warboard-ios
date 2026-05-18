@@ -51,6 +51,17 @@ final class ChainLiveActivityController {
     private var lastChain: Int = -1
     private var lastTimeoutDeadlineMs: Int64 = 0
     private var lastCooldownDeadlineMs: Int64 = 0
+    /// v0.4.61: last-known bars + cooldowns from the BarReporter.
+    /// Merged into every Activity.update() so the lock-screen Live
+    /// Activity surface always shows the latest values BarReporter
+    /// has captured — even when a chain tick fires without fresh
+    /// bars data. updateBars(...) writes here; sync(...) reads.
+    private var lastEnergyCurrent: Int = 0
+    private var lastEnergyMax: Int = 0
+    private var lastNerveCurrent: Int = 0
+    private var lastNerveMax: Int = 0
+    private var lastDrugDeadlineMs: Int64 = 0
+    private var lastBoosterDeadlineMs: Int64 = 0
 
     /// Long-lived task watching the current activity's pushTokenUpdates
     /// async sequence. Each token (initial issue + any subsequent
@@ -82,6 +93,44 @@ final class ChainLiveActivityController {
     /// the war room's current state. Idempotent: calling this on every
     /// poll with the same data is a no-op (Activity.update sends a push
     /// to the system but the widget only re-renders on actual changes).
+    /// Push fresh bars + cooldowns into the controller's cache. If a
+    /// Live Activity is currently active, the activity is re-pushed
+    /// with the new bars merged into its state. If no activity is
+    /// active, the values are stored for the next sync() call.
+    /// Called from BarReporter after each successful Torn dashboard
+    /// fetch (60 s while app is foreground) so the lock-screen
+    /// surface tracks bars in near-real-time without burning a
+    /// separate APNs push round trip.
+    func updateBars(energyCurrent: Int,
+                    energyMax: Int,
+                    nerveCurrent: Int,
+                    nerveMax: Int,
+                    drugDeadlineMs: Int64,
+                    boosterDeadlineMs: Int64) {
+        lastEnergyCurrent  = energyCurrent
+        lastEnergyMax      = energyMax
+        lastNerveCurrent   = nerveCurrent
+        lastNerveMax       = nerveMax
+        lastDrugDeadlineMs = drugDeadlineMs
+        lastBoosterDeadlineMs = boosterDeadlineMs
+        guard #available(iOS 16.1, *) else { return }
+        guard let active = current, active.activityState == .active else { return }
+        let state = ChainActivityAttributes.ContentState(
+            chain: lastChain >= 0 ? lastChain : 0,
+            timeoutDeadlineMs: lastTimeoutDeadlineMs,
+            cooldownDeadlineMs: lastCooldownDeadlineMs,
+            myScore: 0,
+            enemyScore: 0,
+            energyCurrent: energyCurrent,
+            energyMax: energyMax,
+            nerveCurrent: nerveCurrent,
+            nerveMax: nerveMax,
+            drugDeadlineMs: drugDeadlineMs,
+            boosterDeadlineMs: boosterDeadlineMs
+        )
+        Task { await active.update(ActivityContent(state: state, staleDate: nil)) }
+    }
+
     func sync(warId: String,
               enemyName: String,
               chain: Int,
@@ -140,7 +189,13 @@ final class ChainLiveActivityController {
             timeoutDeadlineMs: effectiveTimeout,
             cooldownDeadlineMs: effectiveCooldown,
             myScore: myScore,
-            enemyScore: enemyScore
+            enemyScore: enemyScore,
+            energyCurrent: lastEnergyCurrent,
+            energyMax: lastEnergyMax,
+            nerveCurrent: lastNerveCurrent,
+            nerveMax: lastNerveMax,
+            drugDeadlineMs: lastDrugDeadlineMs,
+            boosterDeadlineMs: lastBoosterDeadlineMs
         )
 
         // End conditions — war over, chain == 0 (between chains), OR
