@@ -8,6 +8,7 @@ import SwiftUI
 struct ChainWidgetBundle: WidgetBundle {
     var body: some Widget {
         ChainLiveActivity()
+        StatusLiveActivity()
         StatusWidget()
     }
 }

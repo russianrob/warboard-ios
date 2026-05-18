@@ -82,6 +82,20 @@ final class BarReporter: ObservableObject {
                     boosterDeadlineMs: boosterDl
                 )
             }
+            // And into the always-on Status Live Activity if user
+            // has started one. Same data, different surface — Status
+            // LA is independent of war state.
+            if #available(iOS 16.2, *) {
+                StatusLiveActivityController.shared.update(StatusActivityAttributes.ContentState(
+                    energyCurrent: snap.energy.current,
+                    energyMax:     snap.energy.maximum,
+                    nerveCurrent:  snap.nerve.current,
+                    nerveMax:      snap.nerve.maximum,
+                    drugDeadlineMs:    drugDl,
+                    boosterDeadlineMs: boosterDl,
+                    writtenAtMs: nowMs
+                ))
+            }
         }
         if !attacks.isEmpty {
             await WarboardAPI.reportMyAttacks(baseUrl: prefs.baseUrl, jwt: a.token, attacks: attacks)

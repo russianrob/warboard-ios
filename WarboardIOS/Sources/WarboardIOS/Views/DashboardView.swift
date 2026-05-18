@@ -90,6 +90,13 @@ private struct DashboardBody: View {
             BarRow(label: "Nerve",   bar: snap.nerve,  color: .red,    elapsed: elapsed)
             BarRow(label: "Happy",   bar: snap.happy,  color: .yellow, elapsed: elapsed)
             BarRow(label: "Life",    bar: snap.life,   color: .green,  elapsed: elapsed)
+
+            // v0.4.62: Start / stop the always-on Status Live Activity.
+            // Foreground updates only — BarReporter pushes every 60s
+            // while the app is open. Activity persists on lock screen
+            // + Dynamic Island even after backgrounding (last-known
+            // values + accurate cooldown countdowns via Text(timerInterval:)).
+            StatusLiveActivityButton(snap: snap, drugSeconds: live(snap.drugSeconds), boosterSeconds: live(snap.boosterSeconds))
             // Chain bar lives in the same Status section so users see
             // it alongside Energy/Nerve. Synthesised from the
             // ChainTickerViewModel (always-on chain poll, no war
@@ -124,6 +131,64 @@ private struct DashboardBody: View {
                 }
                 .padding(10)
                 .background(Color.cyan.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
+            }
+        }
+    }
+}
+
+/// Start / stop the always-on Status Live Activity. Lives in the
+/// Dashboard so the button sits next to the bars it surfaces. Reflects
+/// live `isActive` state so re-opening the app while the activity is
+/// still running shows the Stop button instead of a redundant Start.
+private struct StatusLiveActivityButton: View {
+    let snap: TornAPI.DashboardSnapshot
+    let drugSeconds: Int
+    let boosterSeconds: Int
+    @State private var isActive: Bool = {
+        if #available(iOS 16.2, *) {
+            StatusLiveActivityController.shared.adoptExisting()
+            return StatusLiveActivityController.shared.isActive
+        }
+        return false
+    }()
+    private let ticker = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        if #available(iOS 16.2, *) {
+            Button {
+                if isActive {
+                    StatusLiveActivityController.shared.stop()
+                } else {
+                    let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+                    let drugDl    = drugSeconds > 0    ? nowMs + Int64(drugSeconds) * 1000    : 0
+                    let boosterDl = boosterSeconds > 0 ? nowMs + Int64(boosterSeconds) * 1000 : 0
+                    StatusLiveActivityController.shared.start(
+                        playerName: snap.playerName,
+                        initialState: StatusActivityAttributes.ContentState(
+                            energyCurrent: snap.energy.current,
+                            energyMax:     snap.energy.maximum,
+                            nerveCurrent:  snap.nerve.current,
+                            nerveMax:      snap.nerve.maximum,
+                            drugDeadlineMs:    drugDl,
+                            boosterDeadlineMs: boosterDl,
+                            writtenAtMs: nowMs
+                        )
+                    )
+                }
+                // Reflect new state immediately; the ticker below also
+                // re-checks every 2s in case the activity ends on its
+                // own (12h expiry, user dismisses from lock screen, etc.).
+                isActive = StatusLiveActivityController.shared.isActive
+            } label: {
+                Label(isActive ? "Stop Live Activity" : "Start Live Activity",
+                      systemImage: isActive ? "stop.circle.fill" : "play.circle.fill")
+                    .font(.caption.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
+            .tint(isActive ? .red : .accentColor)
+            .controlSize(.small)
+            .onReceive(ticker) { _ in
+                isActive = StatusLiveActivityController.shared.isActive
             }
         }
     }
