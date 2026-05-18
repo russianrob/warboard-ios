@@ -53,7 +53,7 @@ struct WarRoomView: View {
                                 if vm.postWarReport == nil { vm.loadPostWarReport() }
                             })
                 case .chat:
-                    TornChatLauncher()
+                    TornChatWebView()
                 case .report:
                     ReportTab(report: vm.scoutReport, loading: vm.scoutLoading,
                               onLoad: { vm.loadScoutReport() })
