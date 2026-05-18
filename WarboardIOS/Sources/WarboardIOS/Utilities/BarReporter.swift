@@ -52,6 +52,20 @@ final class BarReporter: ObservableObject {
 
         if let snap = snap, snap.error == nil {
             await WarboardAPI.reportMyBars(baseUrl: prefs.baseUrl, jwt: a.token, snap: snap)
+            // Mirror the snap into the App Group-shared cache so the
+            // home-screen Status widget renders the same bars +
+            // cooldowns we just pushed to the server. WidgetCenter
+            // reload happens inside BarsCache.write.
+            let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+            BarsCache.write(BarsCache.Snapshot(
+                energyCurrent: snap.energy.current,
+                energyMax:     snap.energy.maximum,
+                nerveCurrent:  snap.nerve.current,
+                nerveMax:      snap.nerve.maximum,
+                drugDeadlineMs:    snap.drugSeconds > 0    ? nowMs + Int64(snap.drugSeconds) * 1000    : 0,
+                boosterDeadlineMs: snap.boosterSeconds > 0 ? nowMs + Int64(snap.boosterSeconds) * 1000 : 0,
+                writtenAtMs: nowMs
+            ))
         }
         if !attacks.isEmpty {
             await WarboardAPI.reportMyAttacks(baseUrl: prefs.baseUrl, jwt: a.token, attacks: attacks)

@@ -14,7 +14,7 @@ packages:
 
 settings:
   base:
-    MARKETING_VERSION: "0.4.59"
+    MARKETING_VERSION: "0.4.60"
     CURRENT_PROJECT_VERSION: "1"
     DEVELOPMENT_TEAM: "DAD59U75G9"
     CODE_SIGN_STYLE: Manual
@@ -110,5 +110,6 @@ targets:
         PROVISIONING_PROFILE_SPECIFIER: "Warboard ChainWidget App Store"
         PRODUCT_BUNDLE_IDENTIFIER: com.tornwar.warboard.ChainWidget
         DEVELOPMENT_TEAM: "DAD59U75G9"
+        CODE_SIGN_ENTITLEMENTS: WarboardIOS/Resources/ChainWidget.entitlements
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: "Apple Distribution"

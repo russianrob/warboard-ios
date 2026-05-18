@@ -44,7 +44,16 @@ final class PrefsStore: ObservableObject {
     @Published var hideOnline: Bool { didSet { defaults.set(hideOnline, forKey: Self.kHideOnline) } }
     @Published var hideOffline: Bool { didSet { defaults.set(hideOffline, forKey: Self.kHideOffline) } }
 
-    init(defaults: UserDefaults = .standard) {
+    /// v0.4.60: switched default to App Group-shared UserDefaults so
+    /// the home-screen Status widget can read the same prefs the main
+    /// app writes (apiKey, baseUrl, etc. — needed if the widget ever
+    /// wants to do its own API call instead of reading the BarsCache).
+    /// Falls back to `.standard` only when the App Group container
+    /// isn't available (unprovisioned simulator builds, broken
+    /// entitlements). Cached prefs from pre-v0.4.60 installs WILL be
+    /// lost on the first launch with App Group — acceptable since
+    /// users only need to re-enter their Torn API key once.
+    init(defaults: UserDefaults = UserDefaults(suiteName: "group.com.tornwar.warboard") ?? .standard) {
         self.defaults = defaults
         self.apiKey = defaults.string(forKey: Self.kApiKey) ?? ""
         self.baseUrl = defaults.string(forKey: Self.kBaseUrl) ?? "https://tornwar.com"
