@@ -141,6 +141,7 @@ private struct DashboardBody: View {
 /// live `isActive` state so re-opening the app while the activity is
 /// still running shows the Stop button instead of a redundant Start.
 private struct StatusLiveActivityButton: View {
+    @EnvironmentObject private var prefs: PrefsStore
     let snap: TornAPI.DashboardSnapshot
     let drugSeconds: Int
     let boosterSeconds: Int
@@ -162,6 +163,7 @@ private struct StatusLiveActivityButton: View {
                     let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
                     let drugDl    = drugSeconds > 0    ? nowMs + Int64(drugSeconds) * 1000    : 0
                     let boosterDl = boosterSeconds > 0 ? nowMs + Int64(boosterSeconds) * 1000 : 0
+                    let auth = prefs.cachedJwt()
                     StatusLiveActivityController.shared.start(
                         playerName: snap.playerName,
                         initialState: StatusActivityAttributes.ContentState(
@@ -172,7 +174,10 @@ private struct StatusLiveActivityButton: View {
                             drugDeadlineMs:    drugDl,
                             boosterDeadlineMs: boosterDl,
                             writtenAtMs: nowMs
-                        )
+                        ),
+                        baseUrl: prefs.baseUrl,
+                        jwt: auth?.token ?? "",
+                        apiKey: prefs.apiKey
                     )
                 }
                 // Reflect new state immediately; the ticker below also
