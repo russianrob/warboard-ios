@@ -53,7 +53,7 @@ struct WarRoomView: View {
                                 if vm.postWarReport == nil { vm.loadPostWarReport() }
                             })
                 case .chat:
-                    ChatPanel(warId: war.warId)
+                    TornChatLauncher()
                 case .report:
                     ReportTab(report: vm.scoutReport, loading: vm.scoutLoading,
                               onLoad: { vm.loadScoutReport() })
@@ -483,6 +483,50 @@ private struct TargetList: View {
         case "federal", "fallen":   return 7.0
         default:                    return 6.0
         }
+    }
+}
+
+/// Chat sub-tab content — centralized chat lives on torn.com. We
+/// launch an in-app Safari sheet (SFSafariViewController) that shares
+/// the system Safari cookie jar, so the user's existing Torn login
+/// carries over and faction chat appears immediately on the right-side
+/// panel. Respects the linkOpenInApp pref: when false, hands off to
+/// the system browser instead.
+private struct TornChatLauncher: View {
+    @EnvironmentObject private var prefs: PrefsStore
+    @Environment(\.openURL) private var openURL
+    @State private var sheet: SafariSheet?
+    private let tornURL = URL(string: "https://www.torn.com/index.php")!
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "bubble.left.and.bubble.right.fill")
+                .font(.system(size: 56))
+                .foregroundStyle(.tertiary)
+            Text("Torn Chat")
+                .font(.title3.bold())
+            Text("Torn's faction chat lives on torn.com. Tap below to open it — your existing Torn login carries over.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+            Button {
+                if prefs.linkOpenInApp {
+                    sheet = tornURL.asSafariSheet
+                } else {
+                    openURL(tornURL)
+                }
+            } label: {
+                Label("Open Torn", systemImage: "arrow.up.right.square")
+                    .font(.body.bold())
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .padding(.top, 8)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding()
+        .sheet(item: $sheet) { $0 }
     }
 }
 
