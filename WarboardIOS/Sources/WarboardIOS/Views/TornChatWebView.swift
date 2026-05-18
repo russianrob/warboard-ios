@@ -20,8 +20,10 @@ import WebKit
 /// shared `WKWebView` down.
 struct TornChatWebView: View {
     var body: some View {
+        // No .ignoresSafeArea — letting SwiftUI inset for the home
+        // indicator + bottom nav keeps Torn's chat input above the
+        // hardware safe-area instead of being clipped by it.
         WKWebViewRepresentable()
-            .ignoresSafeArea(.container, edges: .bottom)
     }
 }
 
