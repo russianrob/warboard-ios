@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import SocketIO
+import UIKit
 
 /// War Room state holder. Polls `/api/faction/<fid>/war` + `/api/poll`
 /// every 15 s. Mirrors the Android `WarRoomViewModel` shape so future
@@ -184,6 +185,13 @@ final class WarRoomViewModel: ObservableObject {
         guard case .active(let war) = state,
               let prefs = prefs, let auth = auth,
               let a = await auth.ensureAuth() else { return }
+        // Mirror FactionOps userscript v5.0.95/96: copy a call message
+        // to the system clipboard so the user can paste it straight
+        // into Torn chat after tapping Call / Deal. Only fires for
+        // "call" — "uncall" doesn't trigger a clipboard write.
+        if action == "call" {
+            copyCallToClipboard(target, isDeal: isDeal)
+        }
         _ = await WarboardAPI.callTarget(
             baseUrl: prefs.baseUrl, jwt: a.token,
             warId: war.warId, action: action,
@@ -191,6 +199,24 @@ final class WarRoomViewModel: ObservableObject {
             isDeal: isDeal
         )
         await tick()
+    }
+
+    /// Format + write the call announcement to the system clipboard.
+    /// Wording branches on isDeal so deal calls don't carry a timer
+    /// (they're arrangements, not race-the-clock events) per the
+    /// factionops userscript v5.0.96 rationale.
+    private func copyCallToClipboard(_ target: EnemyTarget, isDeal: Bool) {
+        var text: String
+        if isDeal {
+            text = "I have a med deal with \(target.name)"
+        } else {
+            text = "I got \(target.name)"
+            if target.untilSec > 0 {
+                let mins = max(1, Int((Double(target.untilSec) / 60.0).rounded()))
+                text += " in \(mins) " + (mins == 1 ? "minute" : "minutes")
+            }
+        }
+        UIPasteboard.general.string = text
     }
 
     /// Anchor for chain-deadline math — set right BEFORE the network
