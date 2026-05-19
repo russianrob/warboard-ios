@@ -18,7 +18,10 @@ packages:
   # the Starscream URL patch, push.
   SocketIO:
     url: https://github.com/russianrob/socket.io-client-swift
-    from: "16.1.0"
+    # Tracking the fork's master branch instead of a version tag
+    # because the Starscream URL patch lives on master but isn't in
+    # any tagged release. We control the fork — HEAD is safe.
+    branch: master
 
 settings:
   base:
