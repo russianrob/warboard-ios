@@ -122,6 +122,14 @@ targets:
     sources:
       - path: WarboardIOS/Sources/WarboardWatch
       - path: WarboardIOS/Sources/Shared
+        excludes:
+          # ActivityKit is iOS-only; pulling these into the watch
+          # compile fails with "Unable to find module dependency:
+          # 'ActivityKit'". WatchBarsPayload is the only Shared
+          # file the watch actually needs.
+          - "ChainActivityAttributes.swift"
+          - "StatusActivityAttributes.swift"
+          - "BarsCache.swift"
     dependencies:
       - target: WarboardWatchComplication
     info:
@@ -147,6 +155,10 @@ targets:
     sources:
       - path: WarboardIOS/Sources/WarboardWatchComplication
       - path: WarboardIOS/Sources/Shared
+        excludes:
+          - "ChainActivityAttributes.swift"
+          - "StatusActivityAttributes.swift"
+          - "BarsCache.swift"
     info:
       path: WarboardIOS/Sources/WarboardWatchComplication/Info.plist
     settings:
