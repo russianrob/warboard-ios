@@ -3,9 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>method</key>
-    <string>app-store-connect</string>
-    <key>destination</key>
-    <string>export</string>
+    <string>app-store</string>
     <key>teamID</key>
     <string>DAD59U75G9</string>
     <key>signingStyle</key>
