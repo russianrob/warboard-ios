@@ -25,7 +25,6 @@ struct StatusView: View {
                     Cooldown(label: "Booster",
                              deadlineMs: payload.boosterDeadlineMs,
                              color: .blue)
-                    SyncFooter(writtenAtMs: payload.writtenAtMs)
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
@@ -100,22 +99,3 @@ private struct Cooldown: View {
     }
 }
 
-private struct SyncFooter: View {
-    let writtenAtMs: Int64
-    @State private var now = Date()
-    private let tick = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
-    var body: some View {
-        Text(text)
-            .font(.caption2)
-            .foregroundStyle(.tertiary)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .onReceive(tick) { now = $0 }
-    }
-    private var text: String {
-        let nowMs = Int64(now.timeIntervalSince1970 * 1000)
-        let age = Swift.max(0, (nowMs - writtenAtMs) / 1000)
-        if age < 60 { return "synced just now" }
-        if age < 3600 { return "synced \(age / 60)m ago" }
-        return "synced \(age / 3600)h ago"
-    }
-}
