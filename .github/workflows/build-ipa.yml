@@ -163,6 +163,47 @@ jobs:
             CODE_SIGNING_ALLOWED=YES \
             OTHER_CODE_SIGN_FLAGS="--timestamp"
 
+      - name: Splice Watch into archive
+        # xcodegen / xcodebuild left WarboardWatch.app as a top-level
+        # entry in the archive instead of embedding it into Warboard.app
+        # /Watch/. That made IDEDistributionMethodManager classify the
+        # archive as "neither iOS-app-nor-watchOS-app" and reject every
+        # App Store distribution method. Manual splice: move the watch
+        # app into the iOS app's Watch/ subdir, then re-sign the iOS
+        # app bundle (--deep covers all nested signatures including
+        # the moved watch app's _CodeSignature).
+        if: steps.sign_check.outputs.available == 'true'
+        run: |
+          set -e
+          ARCH="$RUNNER_TEMP/Warboard.xcarchive"
+          APPS="$ARCH/Products/Applications"
+          IOS_APP="$APPS/Warboard.app"
+          WATCH_APP="$APPS/WarboardWatch.app"
+          if [[ ! -d "$WATCH_APP" ]]; then
+            echo "::warning::WarboardWatch.app not at archive top level — skipping splice"
+            ls -la "$APPS"
+            exit 0
+          fi
+          if [[ ! -d "$IOS_APP" ]]; then
+            echo "::error::Warboard.app missing from archive — fatal"
+            ls -la "$APPS"
+            exit 1
+          fi
+          mkdir -p "$IOS_APP/Watch"
+          mv "$WATCH_APP" "$IOS_APP/Watch/WarboardWatch.app"
+          echo "Moved WarboardWatch.app → $IOS_APP/Watch/"
+          # Re-sign Warboard.app so its signature covers the newly-added
+          # Watch/ subdirectory. --deep walks nested bundles and re-signs
+          # each in turn (entitlements come from each bundle's own
+          # embedded.mobileprovision, which we don't disturb).
+          codesign --force --sign "Apple Distribution: Robert Hay (DAD59U75G9)" \
+                   --deep --timestamp \
+                   "$IOS_APP"
+          echo "Re-signed Warboard.app with deep walk"
+          echo "=== Final archive layout ==="
+          ls -la "$APPS"
+          ls -la "$IOS_APP/Watch"
+
       - name: Export IPA
         if: steps.sign_check.outputs.available == 'true'
         run: |

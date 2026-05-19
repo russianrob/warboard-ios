@@ -40,30 +40,15 @@ targets:
     dependencies:
       - target: ChainWidget
       - target: WarboardWatch
-        # embed:true alone produces the WRONG copy destination for
-        # watchOS — xcodegen has no built-in "Watch Content" mapping,
-        # so it left WarboardWatch.app at archive top level instead of
-        # inside Warboard.app/Watch/. The postBuildScript below does
-        # the embedding manually after Warboard.app is built. Without
-        # this, IDEDistributionMethodManager rejects every App Store
-        # distribution method because the archive looks like two
-        # independent apps rather than one iOS app with a paired watch.
+        # Build order only — embedding is done as a post-archive CI
+        # step (.github/workflows/build-ipa.yml: "Splice Watch into
+        # archive") because xcodegen's embed:true + postBuildScripts
+        # both produced archives that exportArchive rejected as
+        # "Unknown Distribution Error". The CI splice physically moves
+        # WarboardWatch.app into Warboard.app/Watch/ and re-signs.
         embed: false
       - package: SocketIO
         product: SocketIO
-    postBuildScripts:
-      - name: Embed Watch Content
-        script: |
-          set -e
-          WATCH_SRC="$BUILT_PRODUCTS_DIR/WarboardWatch.app"
-          WATCH_DST_DIR="$TARGET_BUILD_DIR/$WRAPPER_NAME/Watch"
-          if [[ -d "$WATCH_SRC" ]]; then
-            mkdir -p "$WATCH_DST_DIR"
-            rsync -aE --delete "$WATCH_SRC" "$WATCH_DST_DIR/"
-            echo "Embedded WarboardWatch.app → $WATCH_DST_DIR/WarboardWatch.app"
-          else
-            echo "warning: WarboardWatch.app not found at $WATCH_SRC — skipping embed"
-          fi
     settings:
       base:
         PROVISIONING_PROFILE_SPECIFIER: "Warboard App Store"
