@@ -1,0 +1,24 @@
+{
+  "originHash" : "515640b36ce75e042b03cf237895df68f0f18feececcd3db7e208018fe03bf43",
+  "pins" : [
+    {
+      "identity" : "socket.io-client-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/russianrob/socket.io-client-swift",
+      "state" : {
+        "branch" : "master",
+        "revision" : "abf1eb27b2b49c074a860bb9c12dfaf3741868b3"
+      }
+    },
+    {
+      "identity" : "starscream",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/russianrob/Starscream.git",
+      "state" : {
+        "revision" : "c6bfd1af48efcc9a9ad203665db12375ba6b145a",
+        "version" : "4.0.8"
+      }
+    }
+  ],
+  "version" : 3
+}
