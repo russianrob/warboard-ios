@@ -18,6 +18,10 @@
         <string>Warboard App Store</string>
         <key>com.tornwar.warboard.ChainWidget</key>
         <string>Warboard ChainWidget App Store</string>
+        <key>com.tornwar.warboard.watchkitapp</key>
+        <string>Warboard Watch App Store</string>
+        <key>com.tornwar.warboard.watchkitapp.WarboardWatchComplication</key>
+        <string>Warboard Watch Complication App Store</string>
     </dict>
     <key>uploadSymbols</key>
     <true/>
