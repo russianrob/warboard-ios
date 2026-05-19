@@ -68,6 +68,18 @@ final class BarReporter: ObservableObject {
                 boosterDeadlineMs: boosterDl,
                 writtenAtMs: nowMs
             ))
+            // Mirror to the paired Apple Watch so the StatusComplication
+            // and watchOS app stay in sync with the home-screen widget.
+            // Cheap no-op when no watch is paired or WCSession is idle.
+            WatchSyncController.shared.push(payload: WatchBarsPayload(
+                energyCurrent: snap.energy.current,
+                energyMax:     snap.energy.maximum,
+                nerveCurrent:  snap.nerve.current,
+                nerveMax:      snap.nerve.maximum,
+                drugDeadlineMs:    drugDl,
+                boosterDeadlineMs: boosterDl,
+                writtenAtMs: nowMs
+            ))
             // Also push the bars into the chain Live Activity if one
             // is active — gives the lock-screen / Dynamic Island a
             // near-real-time bars surface during war without paying

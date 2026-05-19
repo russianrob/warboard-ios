@@ -6,6 +6,7 @@ options:
   bundleIdPrefix: com.tornwar
   deploymentTarget:
     iOS: "18.0"
+    watchOS: "10.0"
 
 packages:
   SocketIO:
@@ -14,7 +15,7 @@ packages:
 
 settings:
   base:
-    MARKETING_VERSION: "0.4.63"
+    MARKETING_VERSION: "0.5.0"
     CURRENT_PROJECT_VERSION: "1"
     DEVELOPMENT_TEAM: "DAD59U75G9"
     CODE_SIGN_STYLE: Manual
@@ -38,6 +39,7 @@ targets:
       - path: WarboardIOS/AppIcon/Assets.xcassets
     dependencies:
       - target: ChainWidget
+      - target: WarboardWatch
       - package: SocketIO
         product: SocketIO
     settings:
@@ -113,3 +115,47 @@ targets:
         CODE_SIGN_ENTITLEMENTS: WarboardIOS/Resources/ChainWidget.entitlements
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: "Apple Distribution"
+
+  WarboardWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - path: WarboardIOS/Sources/WarboardWatch
+      - path: WarboardIOS/Sources/Shared
+    dependencies:
+      - target: WarboardWatchComplication
+    info:
+      path: WarboardIOS/Sources/WarboardWatch/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tornwar.warboard.watchkitapp
+        TARGETED_DEVICE_FAMILY: "4"
+        SUPPORTS_MACCATALYST: NO
+        # Manual signing parity with the iOS targets. The profile +
+        # App ID must be registered in the Apple Developer portal
+        # before CI can install it from IOS_WATCH_PROVISIONING_PROFILE_BASE64.
+        PROVISIONING_PROFILE_SPECIFIER: "Warboard Watch App Store"
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "Apple Distribution"
+        DEVELOPMENT_TEAM: "DAD59U75G9"
+        WATCHOS_DEPLOYMENT_TARGET: "10.0"
+        SKIP_INSTALL: NO
+
+  WarboardWatchComplication:
+    type: app-extension
+    platform: watchOS
+    sources:
+      - path: WarboardIOS/Sources/WarboardWatchComplication
+      - path: WarboardIOS/Sources/Shared
+    info:
+      path: WarboardIOS/Sources/WarboardWatchComplication/Info.plist
+    settings:
+      base:
+        SKIP_INSTALL: NO
+        PRODUCT_BUNDLE_IDENTIFIER: com.tornwar.warboard.watchkitapp.WarboardWatchComplication
+        TARGETED_DEVICE_FAMILY: "4"
+        PROVISIONING_PROFILE_SPECIFIER: "Warboard Watch Complication App Store"
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "Apple Distribution"
+        DEVELOPMENT_TEAM: "DAD59U75G9"
+        WATCHOS_DEPLOYMENT_TARGET: "10.0"
