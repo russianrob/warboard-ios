@@ -185,3 +185,30 @@ targets:
         CODE_SIGN_IDENTITY: "Apple Distribution"
         DEVELOPMENT_TEAM: "DAD59U75G9"
         WATCHOS_DEPLOYMENT_TARGET: "10.0"
+
+# Explicit scheme so the Warboard main scheme is always created and
+# marked Shared after `xcodegen generate`. Without this block, xcodegen
+# auto-generated schemes for the extension/watch targets but skipped
+# Warboard itself (cause unclear — possibly the embed:false +
+# postBuildScript history), and Xcode Cloud could only see schemes
+# tied to extensions, not the actual app. Manually-added schemes in
+# Manage Schemes get wiped on every regenerate, so this lives in the
+# spec instead.
+schemes:
+  Warboard:
+    build:
+      targets:
+        Warboard: all
+        ChainWidget: all
+        WarboardWatch: all
+        WarboardWatchComplication: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    test:
+      config: Debug
