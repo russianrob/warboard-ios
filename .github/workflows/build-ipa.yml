@@ -179,6 +179,31 @@ jobs:
           echo "SIGNED_IPA=$SIGNED_IPA" >> "$GITHUB_ENV"
           ls -la "$SIGNED_IPA"
 
+      - name: Dump xcarchive Info.plist (on failure)
+        if: failure() && steps.sign_check.outputs.available == 'true'
+        run: |
+          ARCHIVE_INFO="$RUNNER_TEMP/Warboard.xcarchive/Info.plist"
+          if [[ -f "$ARCHIVE_INFO" ]]; then
+            echo "=== Warboard.xcarchive/Info.plist (decoded) ==="
+            plutil -p "$ARCHIVE_INFO"
+            echo ""
+            echo "=== Products/Applications layout ==="
+            ls -la "$RUNNER_TEMP/Warboard.xcarchive/Products/Applications/" 2>/dev/null || echo "(no Products/Applications)"
+            # If the iOS app exists, check whether it embeds the watch app
+            IOS_APP="$(find "$RUNNER_TEMP/Warboard.xcarchive/Products/Applications" -maxdepth 2 -name '*.app' -type d | head -1)"
+            if [[ -n "$IOS_APP" ]]; then
+              echo ""
+              echo "=== $(basename "$IOS_APP") top-level ==="
+              ls -la "$IOS_APP" | head -20
+              echo ""
+              echo "=== $(basename "$IOS_APP")/Watch/ ==="
+              ls -la "$IOS_APP/Watch" 2>/dev/null || echo "(no Watch/ subdir — watch app NOT embedded)"
+            fi
+          else
+            echo "No xcarchive at expected path"
+            find "$RUNNER_TEMP" -name "Info.plist" -path "*xcarchive*" | head -3
+          fi
+
       - name: Capture Xcode distribution logs (on failure)
         # IDEDistributionMethodManagerErrorDomain Code=2 is opaque from
         # the top-level error. The actual reason lives in the
