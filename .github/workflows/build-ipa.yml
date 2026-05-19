@@ -179,6 +179,36 @@ jobs:
           echo "SIGNED_IPA=$SIGNED_IPA" >> "$GITHUB_ENV"
           ls -la "$SIGNED_IPA"
 
+      - name: Capture Xcode distribution logs (on failure)
+        # IDEDistributionMethodManagerErrorDomain Code=2 is opaque from
+        # the top-level error. The actual reason lives in the
+        # xcdistributionlogs bundle Xcode writes to /var/folders during
+        # exportArchive. Grab it as an artifact so we can read it.
+        if: failure() && steps.sign_check.outputs.available == 'true'
+        run: |
+          LOG_DIR="$(find /var/folders -type d -name '*.xcdistributionlogs' 2>/dev/null | head -1)"
+          if [[ -n "$LOG_DIR" ]]; then
+            echo "Found distribution log dir: $LOG_DIR"
+            cp -R "$LOG_DIR" "$RUNNER_TEMP/xcdistributionlogs"
+            ls -la "$RUNNER_TEMP/xcdistributionlogs"
+            echo "=== IDEDistribution.standard.log ==="
+            cat "$RUNNER_TEMP/xcdistributionlogs"/IDEDistribution.standard.log 2>/dev/null || echo "(missing)"
+            echo ""
+            echo "=== IDEDistribution.critical.log ==="
+            cat "$RUNNER_TEMP/xcdistributionlogs"/IDEDistribution.critical.log 2>/dev/null || echo "(missing)"
+          else
+            echo "No xcdistributionlogs directory found under /var/folders"
+            find /var/folders -name "*distribution*" 2>/dev/null | head -5
+          fi
+
+      - name: Upload xcdistributionlogs artifact
+        if: failure() && steps.sign_check.outputs.available == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcdistributionlogs-${{ steps.version.outputs.VERSION }}
+          path: ${{ runner.temp }}/xcdistributionlogs
+          if-no-files-found: ignore
+
       - name: Upload to TestFlight
         if: steps.sign_check.outputs.available == 'true' && startsWith(github.ref, 'refs/tags/v')
         env:
