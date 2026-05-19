@@ -40,6 +40,14 @@ targets:
     dependencies:
       - target: ChainWidget
       - target: WarboardWatch
+        # watchOS apps must be embedded into the iOS app's bundle at
+        # /Watch/<watchapp>.app, not just listed as a build-order dep.
+        # Without embed:true the archive contains a free-floating watch
+        # app that Xcode can't classify, causing IDEDistributionMethod
+        # Manager to report "Unknown Distribution Error" with an empty
+        # valid-methods enum → exportArchive fails for any `method`.
+        embed: true
+        codeSign: true
       - package: SocketIO
         product: SocketIO
     settings:
