@@ -27,18 +27,37 @@ final class WatchSyncController: NSObject {
         #endif
     }
 
-    /// Push the latest bars/cooldowns to the watch. Cheap to call — if
-    /// the session isn't activated or no watch is paired, the write is
-    /// silently dropped.
+    /// Push the latest bars/cooldowns + (when available) the credentials
+    /// the watch needs to subscribe to /api/watch/subscribe. Cheap to
+    /// call — silently no-op if no watch is paired.
     func push(payload: WatchBarsPayload) {
         #if canImport(WatchConnectivity)
         let session = WCSession.default
         guard session.activationState == .activated else { return }
         guard session.isPaired else { return }
+        var context = payload.asContextDictionary()
+        // Piggy-back the subscribe credentials onto every push. The
+        // watch's WatchSession reads "watchSubscribe" and POSTs to
+        // /api/watch/subscribe once it also has its APNs token. This
+        // pairing is idempotent server-side — re-POSTing the same
+        // (token, apiKey) just updates the row's `updatedAt`.
+        // PrefsStore is the single source of truth for apiKey on iOS;
+        // read directly from the App Group-shared UserDefaults so we
+        // don't need a singleton wiring change. Field name mirrors
+        // PrefsStore.kApiKey.
+        let suite = UserDefaults(suiteName: "group.com.tornwar.warboard") ?? .standard
+        let apiKey = suite.string(forKey: "warboard.apiKey") ?? ""
+        let jwt = suite.string(forKey: "warboard.jwt") ?? ""
+        if !apiKey.isEmpty && !jwt.isEmpty {
+            context["watchSubscribe"] = [
+                "apiKey": apiKey,
+                "jwt": jwt,
+                "playerName": suite.string(forKey: "warboard.playerName") ?? "",
+            ]
+        }
         do {
-            try session.updateApplicationContext(payload.asContextDictionary())
+            try session.updateApplicationContext(context)
         } catch {
-            // Logged but not fatal — next bar tick will retry.
             print("[WatchSync] updateApplicationContext failed: \(error.localizedDescription)")
         }
         #endif

@@ -2,13 +2,11 @@ import SwiftUI
 
 @main
 struct WarboardWatchApp: App {
+    @WKApplicationDelegateAdaptor(WatchAppDelegate.self) private var appDelegate
     @StateObject private var store = WatchBarsStore.shared
     @StateObject private var session = WatchSession.shared
 
     init() {
-        // Activate the WC session as early as possible so we receive
-        // the iPhone's first applicationContext while the watch app is
-        // still in the background-launch window.
         _ = WatchSession.shared
     }
 
