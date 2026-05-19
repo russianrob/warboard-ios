@@ -36,7 +36,7 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate {
         WatchSession.shared.recordDeviceToken(hex)
     }
 
-    func didFailToRegisterForRemoteNotifications(withError error: Error) {
+    func didFailToRegisterForRemoteNotificationsWithError(_ error: Error) {
         print("[WatchAppDelegate] APNs register failed: \(error.localizedDescription)")
     }
 
