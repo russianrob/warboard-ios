@@ -9,8 +9,15 @@ options:
     watchOS: "10.0"
 
 packages:
+  # Forked from socketio/socket.io-client-swift into russianrob's
+  # account so Xcode Cloud's GitHub App can be installed on it (Apple's
+  # SPM resolver requires repo-level grant for each dep, and you can't
+  # grant on third-party repos). The fork's Package.swift was also
+  # edited to point Starscream → russianrob/Starscream for the same
+  # reason. To upgrade SocketIO: pull upstream into the fork, re-apply
+  # the Starscream URL patch, push.
   SocketIO:
-    url: https://github.com/socketio/socket.io-client-swift
+    url: https://github.com/russianrob/socket.io-client-swift
     from: "16.1.0"
 
 settings:
