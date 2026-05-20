@@ -25,7 +25,7 @@ packages:
 
 settings:
   base:
-    MARKETING_VERSION: "0.6.0"
+    MARKETING_VERSION: "0.5.0"
     CURRENT_PROJECT_VERSION: "1"
     DEVELOPMENT_TEAM: "DAD59U75G9"
     CODE_SIGN_STYLE: Automatic
@@ -48,14 +48,12 @@ targets:
       - path: WarboardIOS/AppIcon/Assets.xcassets
     dependencies:
       - target: ChainWidget
-      # v0.6.0: bringing watch back. Earlier "Unknown Distribution
-      # Error" was with Manual signing + GitHub Actions; switching
-      # to Automatic signing + Xcode Cloud may resolve the
-      # archive-classification issue. embed:true + codeSign:true
-      # asks xcodegen to add the Embed Watch Content copy phase.
-      - target: WarboardWatch
-        embed: true
-        codeSign: true
+      # Watch removed from iOS bundle for now — CI (both Xcode Cloud
+      # AND GitHub Actions) reject iOS+Watch archives with "Unknown
+      # Distribution Error". Proven across signing styles + embed
+      # configurations. Mac IDE archive may still work; haven't
+      # tested. Add back conditionally if/when we ship a Mac-only
+      # release including watch.
       - package: SocketIO
         product: SocketIO
     settings:
@@ -189,8 +187,7 @@ schemes:
       targets:
         Warboard: all
         ChainWidget: all
-        WarboardWatch: all
-        WarboardWatchComplication: all
+        # Watch targets removed from iOS scheme — keeps CI archive iOS-only.
     run:
       config: Debug
     archive:
