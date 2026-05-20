@@ -48,12 +48,15 @@ targets:
       - path: WarboardIOS/AppIcon/Assets.xcassets
     dependencies:
       - target: ChainWidget
-      # v0.6.0: experimenting with fastlane (gym) via GitHub Actions
-      # to see if it sidesteps the iOS+Watch archive classification
-      # bug that breaks raw xcodebuild. Watch is back with embed:true.
-      - target: WarboardWatch
-        embed: true
-        codeSign: true
+      # Watch DEFINITIVELY removed from CI paths after 2026-05-19/20
+      # experiments. Both raw xcodebuild AND fastlane gym fail at
+      # exportArchive — the bug is xcodebuild's archive classifier
+      # not recognizing xcodegen-generated paired iOS+Watch archives.
+      # Watch can only ship via Mac IDE Archive (Product → Archive
+      # button in Xcode.app) which uses Xcode's internal archive
+      # flow that writes ApplicationProperties correctly. Re-enable
+      # the WarboardWatch dependency block + scheme entries locally
+      # when doing a Mac archive that should include watch.
       - package: SocketIO
         product: SocketIO
     settings:
@@ -187,8 +190,7 @@ schemes:
       targets:
         Warboard: all
         ChainWidget: all
-        WarboardWatch: all
-        WarboardWatchComplication: all
+        # Watch targets only added back for local Mac archives.
     run:
       config: Debug
     archive:
