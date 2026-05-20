@@ -630,6 +630,7 @@ private struct TargetRow: View {
     /// across iOS / Android / web.)
     @State private var callPressing = false
     @State private var dealJustPlaced = false
+    @State private var scrollCancelled = false
     /// Long-press timer for the Call button. We can't use SwiftUI's
     /// `.onLongPressGesture` because Button's internal tap recognizer
     /// absorbs the press and short-circuits the long-press threshold —
@@ -693,8 +694,24 @@ private struct TargetRow: View {
                     .contentShape(Capsule())   // hit-test the full pill, not just the text
                     .gesture(
                         DragGesture(minimumDistance: 0)
-                            .onChanged { _ in
-                                if !callPressing {
+                            .onChanged { value in
+                                // v0.5.1: if the user's finger moved
+                                // more than the scroll-cancellation
+                                // threshold, they're scrolling — cancel
+                                // any pending long-press AND don't fire
+                                // on release. Previously a touch-then-
+                                // scroll fired a call because onEnded
+                                // unconditionally invoked onCall.
+                                let dy = abs(value.translation.height)
+                                let dx = abs(value.translation.width)
+                                if dy > 10 || dx > 10 {
+                                    callPressing = false
+                                    callPressTimer?.cancel()
+                                    callPressTimer = nil
+                                    scrollCancelled = true
+                                    return
+                                }
+                                if !callPressing && !scrollCancelled {
                                     callPressing = true
                                     callPressTimer?.cancel()
                                     callPressTimer = Task { @MainActor in
@@ -707,10 +724,19 @@ private struct TargetRow: View {
                                     }
                                 }
                             }
-                            .onEnded { _ in
+                            .onEnded { value in
                                 callPressing = false
                                 callPressTimer?.cancel()
                                 callPressTimer = nil
+                                // Scroll-cancellation: if the finger
+                                // moved more than 10pt during the drag,
+                                // treat as scroll intent, never fire
+                                // the call. Reset flag for next touch.
+                                let dy = abs(value.translation.height)
+                                let dx = abs(value.translation.width)
+                                let wasScroll = scrollCancelled || dy > 10 || dx > 10
+                                scrollCancelled = false
+                                if wasScroll { return }
                                 // If the long-press already fired the
                                 // deal call, suppress the "released =
                                 // tap = regular call" path. Otherwise
