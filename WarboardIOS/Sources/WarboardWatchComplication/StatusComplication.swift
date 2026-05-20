@@ -18,6 +18,10 @@ struct StatusComplication: Widget {
         StaticConfiguration(kind: kind, provider: Provider()) { entry in
             StatusComplicationView(entry: entry)
                 .containerBackground(.fill.tertiary, for: .widget)
+                // widgetURL with the watch app's own scheme forces a
+                // tap-launch back into the watch app. Without it, the
+                // 4-ring layout was somehow eating taps on some faces.
+                .widgetURL(URL(string: "warboardwatch://status"))
         }
         .configurationDisplayName("Warboard Status")
         .description("Energy and Nerve from Torn.")
@@ -79,7 +83,7 @@ private struct StatusComplicationView: View {
 private enum Stat { case energy, nerve, drug, booster
     var color: Color {
         switch self {
-        case .energy: return .yellow
+        case .energy: return .green
         case .nerve: return .red
         case .drug: return .purple
         case .booster: return .blue
@@ -114,7 +118,7 @@ private struct Circular: View {
             Text("\(p?.energyCurrent ?? 0)")
                 .font(.system(size: 11, weight: .bold))
                 .monospacedDigit()
-                .foregroundStyle(.yellow)
+                .foregroundStyle(.green)
         }
     }
     private func ring(_ stat: Stat, fraction: CGFloat, inset: CGFloat) -> some View {
