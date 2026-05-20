@@ -275,11 +275,18 @@ jobs:
           KEY_DIR="$HOME/.appstoreconnect/private_keys"
           mkdir -p "$KEY_DIR"
           echo "$ASC_API_KEY_BASE64" | base64 --decode -o "$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8"
-          xcrun altool --upload-app \
+          xcrun altool --upload-package "$SIGNED_IPA" \
             --type ios \
-            --file "$SIGNED_IPA" \
+            --apple-id "com.tornwar.warboard" \
+            --bundle-id "com.tornwar.warboard" \
+            --bundle-short-version-string "${{ steps.version.outputs.VERSION }}" \
+            --bundle-version "${{ github.run_number }}" \
             --apiKey "$ASC_KEY_ID" \
-            --apiIssuer "$ASC_ISSUER_ID"
+            --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tee altool.log
+          if grep -qE "UPLOAD FAILED|Validation failed|ERROR ITMS-|ERROR:" altool.log; then
+            echo "altool failure" && exit 1
+          fi
+          echo "TestFlight upload succeeded"
 
       - name: Dump xcarchive Info.plist (on failure)
         if: failure() && steps.sign_check.outputs.available == 'true'
