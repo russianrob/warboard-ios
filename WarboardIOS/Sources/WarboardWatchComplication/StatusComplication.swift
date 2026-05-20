@@ -112,8 +112,8 @@ private struct Circular: View {
         ZStack {
             ring(Stat.energy, fraction: energyFrac(), inset: 0)
             ring(Stat.nerve, fraction: nerveFrac(), inset: lineWidth + gap)
-            ring(Stat.drug, fraction: cooldownFrac(deadline: p?.drugDeadlineMs ?? 0), inset: 2 * (lineWidth + gap))
-            ring(Stat.booster, fraction: cooldownFrac(deadline: p?.boosterDeadlineMs ?? 0), inset: 3 * (lineWidth + gap))
+            ring(Stat.drug, fraction: cooldownFrac(deadline: p?.drugDeadlineMs ?? 0, maxHours: 8), inset: 2 * (lineWidth + gap))
+            ring(Stat.booster, fraction: cooldownFrac(deadline: p?.boosterDeadlineMs ?? 0, maxHours: 48), inset: 3 * (lineWidth + gap))
             Text("\(p?.energyCurrent ?? 0)")
                 .font(.system(size: 11, weight: .bold))
                 .monospacedDigit()
@@ -140,21 +140,19 @@ private struct Circular: View {
         guard let p = entry.payload, p.nerveMax > 0 else { return 0 }
         return Swift.min(1, Swift.max(0, CGFloat(p.nerveCurrent) / CGFloat(p.nerveMax)))
     }
-    // Cooldown ring fills when fresh (lots of time remaining), drains
-    // toward 0 as the timer counts down. Ready = empty ring.
-    // We don't know the original total cooldown duration (Torn never
-    // tells us), so use (deadline - writtenAtMs) as the baseline:
-    // when BarReporter first saw the cooldown, the ring was 100%;
-    // every second after, it drains proportionally. If writtenAtMs
-    // is stale, fall back to a 12h max so the ring still drains
-    // smoothly.
-    private func cooldownFrac(deadline: Int64) -> CGFloat {
-        guard deadline > 0, let p = entry.payload else { return 0 }
+    // Cooldown ring: fills when fresh, drains to 0 as timer ticks
+    // down. Apple/Torn don't expose original cooldown duration, so
+    // we use the metric's max known cooldown as the denominator:
+    //   Drug (Xanax): 8h
+    //   Booster: 48h
+    // Earlier bug: using (deadline - writtenAtMs) made total ≈
+    // remaining, so the ring was perpetually near-full.
+    private func cooldownFrac(deadline: Int64, maxHours: Int64) -> CGFloat {
+        guard deadline > 0 else { return 0 }
         let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
         if nowMs >= deadline { return 0 }
         let remaining = deadline - nowMs
-        var total = deadline - p.writtenAtMs
-        if total <= 0 { total = 12 * 3600 * 1000 } // fallback: 12h window
+        let total = maxHours * 3600 * 1000
         return Swift.min(1, Swift.max(0, CGFloat(remaining) / CGFloat(total)))
     }
 }
