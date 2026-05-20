@@ -16,6 +16,22 @@ xcodegen --version
 
 echo "=== ci_post_clone: generating Warboard.xcodeproj ==="
 cd "$CI_PRIMARY_REPOSITORY_PATH"
+
+# Auto-bump MARKETING_VERSION per cloud build so TestFlight doesn't
+# show two builds with the same human-facing version. Format:
+# <MAJOR>.<MINOR>.<CI_BUILD_NUMBER>. CI_BUILD_NUMBER is set by Xcode
+# Cloud (monotonically increasing per workflow). Manual Mac archives
+# skip this block (no CI_BUILD_NUMBER set) and use the project.yml
+# default — keeps local builds stable.
+if [[ -n "${CI_BUILD_NUMBER:-}" ]]; then
+    # Extract the current MAJOR.MINOR from project.yml, append build number.
+    CURRENT=$(grep -E '^\s+MARKETING_VERSION:' project.yml | sed -E 's/.*"([0-9]+\.[0-9]+).*/\1/' | head -1)
+    NEW_VERSION="${CURRENT}.${CI_BUILD_NUMBER}"
+    echo "Patching MARKETING_VERSION → ${NEW_VERSION} (CI_BUILD_NUMBER=${CI_BUILD_NUMBER})"
+    sed -i.bak -E "s/(MARKETING_VERSION: )\".*\"/\1\"${NEW_VERSION}\"/" project.yml
+    rm -f project.yml.bak
+fi
+
 xcodegen generate --spec project.yml
 
 # Xcode Cloud runs with "automatic dependency resolution disabled" and
