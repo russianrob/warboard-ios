@@ -285,9 +285,16 @@ jobs:
           # Watch metadata that hints at platform. Now that the watch
           # app is properly embedded (Warboard.app/Watch/...) the
           # platform should be auto-detected.
+          # Xcode 26.x altool requires explicit --bundle-id when the
+          # IPA has both iOS and watchOS payloads (it can't decide
+          # which platform to upload as). Pinning to the iOS bundle
+          # ID makes it treat the package as an iOS app with embedded
+          # watch.
           xcrun altool --upload-app \
             --type ios \
-            --platform ios \
+            --bundle-id "com.tornwar.warboard" \
+            --bundle-short-version-string "${{ steps.version.outputs.VERSION }}" \
+            --bundle-version "${{ github.run_number }}" \
             --file "$SIGNED_IPA" \
             --apiKey "$ASC_KEY_ID" \
             --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tee altool.log
