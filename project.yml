@@ -48,12 +48,12 @@ targets:
       - path: WarboardIOS/AppIcon/Assets.xcassets
     dependencies:
       - target: ChainWidget
-      # Watch removed from iOS bundle for now — CI (both Xcode Cloud
-      # AND GitHub Actions) reject iOS+Watch archives with "Unknown
-      # Distribution Error". Proven across signing styles + embed
-      # configurations. Mac IDE archive may still work; haven't
-      # tested. Add back conditionally if/when we ship a Mac-only
-      # release including watch.
+      # v0.6.0: experimenting with fastlane (gym) via GitHub Actions
+      # to see if it sidesteps the iOS+Watch archive classification
+      # bug that breaks raw xcodebuild. Watch is back with embed:true.
+      - target: WarboardWatch
+        embed: true
+        codeSign: true
       - package: SocketIO
         product: SocketIO
     settings:
@@ -187,7 +187,8 @@ schemes:
       targets:
         Warboard: all
         ChainWidget: all
-        # Watch targets removed from iOS scheme — keeps CI archive iOS-only.
+        WarboardWatch: all
+        WarboardWatchComplication: all
     run:
       config: Debug
     archive:

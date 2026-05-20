@@ -1,0 +1,51 @@
+default_platform(:ios)
+
+# Fastlane lane: archive iOS app (with embedded watch) → upload to
+# TestFlight. Used by .github/workflows/build-ipa.yml as a workaround
+# for the iOS+Watch "Unknown Distribution Error" we hit with raw
+# xcodebuild — gym wraps xcodebuild with known fixes for archive
+# quirks, and produces an .ipa that App Store Connect accepts.
+
+platform :ios do
+  desc "Build + upload to TestFlight"
+  lane :testflight_build do
+    # Regenerate project from spec — required because we don't
+    # commit Warboard.xcodeproj.
+    sh "cd .. && xcodegen generate --spec project.yml"
+
+    # gym = build + archive + export in one shot. Manual signing
+    # because our profiles are pre-installed by the workflow steps.
+    gym(
+      project: "Warboard.xcodeproj",
+      scheme: "Warboard",
+      configuration: "Release",
+      export_method: "app-store",
+      clean: true,
+      output_directory: "build",
+      output_name: "Warboard.ipa",
+      include_bitcode: false,
+      include_symbols: true,
+      export_options: {
+        method: "app-store",
+        signingStyle: "manual",
+        teamID: "DAD59U75G9",
+        provisioningProfiles: {
+          "com.tornwar.warboard" => "Warboard App Store",
+          "com.tornwar.warboard.ChainWidget" => "Warboard ChainWidget App Store",
+          "com.tornwar.warboard.watchkitapp" => "Warboard Watch App Store",
+          "com.tornwar.warboard.watchkitapp.WarboardWatchComplication" => "Warboard Watch Complication App Store"
+        }
+      }
+    )
+
+    # pilot = upload to TestFlight via App Store Connect API.
+    # Uses ASC_KEY_ID / ASC_ISSUER_ID / ASC_KEY env vars (set by
+    # the GH workflow from secrets).
+    pilot(
+      ipa: "build/Warboard.ipa",
+      skip_waiting_for_build_processing: true,
+      skip_submission: true,
+      changelog: "Build via fastlane CI"
+    )
+  end
+end
