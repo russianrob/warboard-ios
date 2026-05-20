@@ -72,13 +72,22 @@ final class StatusLiveActivityController {
         do {
             let attrs = StatusActivityAttributes(playerName: playerName)
             let content = ActivityContent(state: initialState, staleDate: nil)
-            let activity = try Activity.request(attributes: attrs, content: content, pushType: .token)
+            // Try with pushType: .token first (enables server APNs
+            // push). If that fails (some iOS 16.2-17.1 builds reject
+            // .token), fall back to pushType: nil so the LA still
+            // starts — it just won't get the 5-min server pushes,
+            // only foreground bar tick updates.
+            let activity: Activity<StatusActivityAttributes>
+            do {
+                activity = try Activity.request(attributes: attrs, content: content, pushType: .token)
+            } catch {
+                print("[StatusLA] .token rejected (\(error.localizedDescription)) — retrying without pushType")
+                activity = try Activity.request(attributes: attrs, content: content, pushType: nil)
+            }
             current = activity
             startPushTokenObserver(for: activity)
         } catch {
-            // ActivityKit rejects when user has disabled LAs, system
-            // is out of activity budget, or background restrictions
-            // apply. Silent — caller will see isActive stay false.
+            print("[StatusLA] Activity.request failed: \(error.localizedDescription)")
             current = nil
         }
     }
