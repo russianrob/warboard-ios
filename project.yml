@@ -162,6 +162,15 @@ targets:
         DEVELOPMENT_TEAM: "DAD59U75G9"
         WATCHOS_DEPLOYMENT_TARGET: "10.0"
         SKIP_INSTALL: NO
+        # Xcode 15+ INFOPLIST_KEY_* build settings — these are merged
+        # into the compiled Info.plist at build time and OVERRIDE the
+        # plain Info.plist. ASC rejected our upload because the
+        # auto-merge stripped WKApplication; re-asserting here.
+        INFOPLIST_KEY_WKApplication: YES
+        INFOPLIST_KEY_WKWatchOnly: NO
+        INFOPLIST_KEY_WKCompanionAppBundleIdentifier: "com.tornwar.warboard"
+        INFOPLIST_KEY_CFBundleDisplayName: "Warboard"
+        INFOPLIST_KEY_UIBackgroundModes: "remote-notification"
 
   WarboardWatchComplication:
     type: app-extension
