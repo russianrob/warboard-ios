@@ -282,31 +282,47 @@ jobs:
             fi
           done
 
-      - name: Splice Watch into archive
+      - name: Splice Watch into archive (only if not already embedded)
         if: steps.sign_check.outputs.available == 'true'
         run: |
           set -e
           ARCH="$RUNNER_TEMP/Warboard.xcarchive"
           APPS="$ARCH/Products/Applications"
           IOS_APP="$APPS/Warboard.app"
-          WATCH_APP="$APPS/WarboardWatch.app"
-          if [[ ! -d "$WATCH_APP" ]]; then
-            echo "WarboardWatch.app not at archive top level — already embedded or missing"
+          WATCH_TOP="$APPS/WarboardWatch.app"
+          WATCH_EMBEDDED="$IOS_APP/Watch/WarboardWatch.app"
+          # If xcodegen's embed:true already placed the watch app
+          # inside Warboard.app/Watch/, just REMOVE any duplicate
+          # top-level copy and skip the splice. Otherwise the mv
+          # below would double-nest into Watch/WarboardWatch.app/
+          # WarboardWatch.app/, which Apple rejects as "Invalid
+          # bundle structure".
+          if [[ -d "$WATCH_EMBEDDED" ]]; then
+            echo "Watch already embedded at $WATCH_EMBEDDED — skipping splice"
+            if [[ -d "$WATCH_TOP" ]]; then
+              echo "Removing duplicate top-level $WATCH_TOP"
+              rm -rf "$WATCH_TOP"
+            fi
+            ls -la "$IOS_APP/Watch"
+          elif [[ -d "$WATCH_TOP" ]]; then
+            mkdir -p "$IOS_APP/Watch"
+            mv "$WATCH_TOP" "$WATCH_EMBEDDED"
+            echo "Spliced watch into $WATCH_EMBEDDED"
+          else
+            echo "::warning::No WarboardWatch.app found in archive"
             ls -la "$APPS"
-            ls -la "$IOS_APP/Watch" 2>/dev/null && echo "(already embedded)" || true
             exit 0
           fi
-          mkdir -p "$IOS_APP/Watch"
-          mv "$WATCH_APP" "$IOS_APP/Watch/WarboardWatch.app"
-          # Re-run WKApplication injection on the new path too in
-          # case the previous step ran before splice.
-          NEW_WATCH_INFO="$IOS_APP/Watch/WarboardWatch.app/Info.plist"
-          /usr/libexec/PlistBuddy -c "Delete :WKApplication" "$NEW_WATCH_INFO" 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :WKApplication bool true" "$NEW_WATCH_INFO"
+          # Re-run WKApplication injection on the embedded path
+          # post-splice in case earlier injection step ran before
+          # splice cleanup happened.
+          /usr/libexec/PlistBuddy -c "Delete :WKApplication" "$WATCH_EMBEDDED/Info.plist" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :WKApplication bool true" "$WATCH_EMBEDDED/Info.plist"
+          # Deep re-sign so codesign covers any plist mutations.
           codesign --force --sign "Apple Distribution: Robert Hay (DAD59U75G9)" \
                    --deep --timestamp \
                    "$IOS_APP"
-          echo "Spliced + re-signed (WKApplication confirmed)"
+          echo "Re-signed deep"
 
       - name: Export IPA
         if: steps.sign_check.outputs.available == 'true'
