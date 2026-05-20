@@ -8,7 +8,7 @@ import SwiftUI
 /// over to the War tab would appear stale to the rest of the faction.
 @MainActor
 final class BarReporter: ObservableObject {
-    static let intervalSeconds: UInt64 = 60
+    static let intervalSeconds: UInt64 = 600
 
     private var prefs: PrefsStore?
     private var auth: AuthRepository?
