@@ -171,87 +171,6 @@ jobs:
           # gym + pilot via our Fastfile.
           fastlane ios testflight_build
 
-      - name: Archive (Release, signed) — DISABLED while testing fastlane
-        if: false && steps.sign_check.outputs.available == 'true'
-        # DEVELOPMENT_TEAM, CODE_SIGN_IDENTITY, CODE_SIGN_STYLE,
-        # PROVISIONING_PROFILE_SPECIFIER are baked into project.yml
-        # per-target (team is the same for all our apps; identity is
-        # the only Apple Distribution cert we have). No command-line
-        # overrides needed — passing `DEVELOPMENT_TEAM=""` (when the
-        # secret was unset) silently defeated the project.yml value
-        # because xcodebuild treats command-line overrides as final.
-        if: steps.sign_check.outputs.available == 'true'
-        run: |
-          xcodebuild archive \
-            -project Warboard.xcodeproj \
-            -scheme Warboard \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -archivePath "$RUNNER_TEMP/Warboard.xcarchive" \
-            MARKETING_VERSION="${{ steps.version.outputs.VERSION }}" \
-            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
-            CODE_SIGNING_REQUIRED=YES \
-            CODE_SIGNING_ALLOWED=YES \
-            OTHER_CODE_SIGN_FLAGS="--timestamp"
-
-      - name: Splice Watch into archive — DISABLED (fastlane handles)
-        if: false && steps.sign_check.outputs.available == 'true'
-        # xcodegen / xcodebuild left WarboardWatch.app as a top-level
-        # entry in the archive instead of embedding it into Warboard.app
-        # /Watch/. That made IDEDistributionMethodManager classify the
-        # archive as "neither iOS-app-nor-watchOS-app" and reject every
-        # App Store distribution method. Manual splice: move the watch
-        # app into the iOS app's Watch/ subdir, then re-sign the iOS
-        # app bundle (--deep covers all nested signatures including
-        # the moved watch app's _CodeSignature).
-        if: steps.sign_check.outputs.available == 'true'
-        run: |
-          set -e
-          ARCH="$RUNNER_TEMP/Warboard.xcarchive"
-          APPS="$ARCH/Products/Applications"
-          IOS_APP="$APPS/Warboard.app"
-          WATCH_APP="$APPS/WarboardWatch.app"
-          if [[ ! -d "$WATCH_APP" ]]; then
-            echo "::warning::WarboardWatch.app not at archive top level — skipping splice"
-            ls -la "$APPS"
-            exit 0
-          fi
-          if [[ ! -d "$IOS_APP" ]]; then
-            echo "::error::Warboard.app missing from archive — fatal"
-            ls -la "$APPS"
-            exit 1
-          fi
-          mkdir -p "$IOS_APP/Watch"
-          mv "$WATCH_APP" "$IOS_APP/Watch/WarboardWatch.app"
-          echo "Moved WarboardWatch.app → $IOS_APP/Watch/"
-          # Re-sign Warboard.app so its signature covers the newly-added
-          # Watch/ subdirectory. --deep walks nested bundles and re-signs
-          # each in turn (entitlements come from each bundle's own
-          # embedded.mobileprovision, which we don't disturb).
-          codesign --force --sign "Apple Distribution: Robert Hay (DAD59U75G9)" \
-                   --deep --timestamp \
-                   "$IOS_APP"
-          echo "Re-signed Warboard.app with deep walk"
-          echo "=== Final archive layout ==="
-          ls -la "$APPS"
-          ls -la "$IOS_APP/Watch"
-
-      - name: Export IPA — DISABLED (fastlane handles)
-        if: false && steps.sign_check.outputs.available == 'true'
-        run: |
-          xcodebuild -exportArchive \
-            -archivePath "$RUNNER_TEMP/Warboard.xcarchive" \
-            -exportPath "$RUNNER_TEMP/export" \
-            -exportOptionsPlist ExportOptions.plist
-          IPA_PATH="$(find "$RUNNER_TEMP/export" -type f -name '*.ipa' -print -quit)"
-          if [[ -z "$IPA_PATH" ]]; then
-            echo "No IPA produced"; ls -la "$RUNNER_TEMP/export"; exit 1
-          fi
-          SIGNED_IPA="$RUNNER_TEMP/Warboard-${{ steps.version.outputs.VERSION }}.ipa"
-          mv "$IPA_PATH" "$SIGNED_IPA"
-          echo "SIGNED_IPA=$SIGNED_IPA" >> "$GITHUB_ENV"
-          ls -la "$SIGNED_IPA"
-
       - name: Dump xcarchive Info.plist (on failure)
         if: failure() && steps.sign_check.outputs.available == 'true'
         run: |
@@ -307,44 +226,14 @@ jobs:
           path: ${{ runner.temp }}/xcdistributionlogs
           if-no-files-found: ignore
 
-      - name: Upload to TestFlight — DISABLED (fastlane pilot does this)
-        if: false && steps.sign_check.outputs.available == 'true' && startsWith(github.ref, 'refs/tags/v')
-        env:
-          ASC_API_KEY_BASE64: ${{ secrets.ASC_API_KEY_BASE64 }}
-          ASC_KEY_ID:         ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID:      ${{ secrets.ASC_ISSUER_ID }}
-        run: |
-          KEY_DIR="$HOME/.appstoreconnect/private_keys"
-          mkdir -p "$KEY_DIR"
-          echo "$ASC_API_KEY_BASE64" | base64 --decode -o "$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8"
-
-          set +e
-          xcrun altool --upload-app \
-            --type ios \
-            --file "$SIGNED_IPA" \
-            --apiKey "$ASC_KEY_ID" \
-            --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tee altool.log
-          STATUS=${PIPESTATUS[0]}
-          if [[ $STATUS -ne 0 ]] || grep -qE "UPLOAD FAILED|Validation failed|ERROR ITMS-" altool.log; then
-            echo "altool reported failure (exit=$STATUS)."
-            exit 1
-          fi
-          echo "TestFlight upload succeeded."
-
       - name: Upload IPA artifact
         if: steps.sign_check.outputs.available == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: Warboard-${{ steps.version.outputs.VERSION }}-ipa
-          path: ${{ env.SIGNED_IPA }}
+          name: Warboard-fastlane-${{ github.run_number }}-ipa
+          path: build/Warboard.ipa
+          if-no-files-found: ignore
           retention-days: 90
-
-      - name: Attach IPA to GitHub Release
-        if: steps.sign_check.outputs.available == 'true' && startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ env.SIGNED_IPA }}
-          generate_release_notes: true
 
       - name: Clean up signing keychain
         if: always() && steps.sign_check.outputs.available == 'true'
