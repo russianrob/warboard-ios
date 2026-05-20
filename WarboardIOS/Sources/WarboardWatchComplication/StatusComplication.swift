@@ -18,10 +18,9 @@ struct StatusComplication: Widget {
         StaticConfiguration(kind: kind, provider: Provider()) { entry in
             StatusComplicationView(entry: entry)
                 .containerBackground(.fill.tertiary, for: .widget)
-                // widgetURL with the watch app's own scheme forces a
-                // tap-launch back into the watch app. Without it, the
-                // 4-ring layout was somehow eating taps on some faces.
-                .widgetURL(URL(string: "warboardwatch://status"))
+                // No widgetURL — let watchOS default tap behavior
+                // launch the parent app. Custom scheme was confusing
+                // watchOS when not registered in the watch Info.plist.
         }
         .configurationDisplayName("Warboard Status")
         .description("Energy and Nerve from Torn.")
