@@ -2,14 +2,19 @@ import Foundation
 import WidgetKit
 
 /// Single source of truth on the watch for the most recent
-/// WatchBarsPayload received from the iPhone. Persists to standard
-/// UserDefaults so the value survives watch app restarts and is
-/// readable by the complication's WidgetKit timeline provider (the
-/// watch widget runs in the same process group as the watch app, so
-/// no App Group needed — UserDefaults.standard suffices).
+/// WatchBarsPayload received from the iPhone. Persists to an App
+/// Group-shared UserDefaults so the complication's WidgetKit
+/// timeline provider (a separate watchOS process) can read it.
+/// Earlier comment claimed UserDefaults.standard worked — that was
+/// wrong; the complication was reading an empty defaults store and
+/// rendering E0.
 final class WatchBarsStore: ObservableObject {
     static let shared = WatchBarsStore()
     private static let key = "warboard.watch.bars-payload.v1"
+    static let appGroupSuite = "group.com.tornwar.warboard.watch"
+    private static func defaults() -> UserDefaults {
+        UserDefaults(suiteName: appGroupSuite) ?? .standard
+    }
 
     @Published private(set) var payload: WatchBarsPayload?
 
@@ -24,12 +29,12 @@ final class WatchBarsStore: ObservableObject {
     }
 
     private static func load() -> WatchBarsPayload? {
-        guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
+        guard let data = defaults().data(forKey: key) else { return nil }
         return try? JSONDecoder().decode(WatchBarsPayload.self, from: data)
     }
 
     private static func persist(_ payload: WatchBarsPayload) {
         guard let data = try? JSONEncoder().encode(payload) else { return }
-        UserDefaults.standard.set(data, forKey: key)
+        defaults().set(data, forKey: key)
     }
 }

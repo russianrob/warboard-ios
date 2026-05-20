@@ -51,7 +51,11 @@ private struct Provider: TimelineProvider {
         completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(5 * 60))))
     }
     private func load() -> WatchBarsPayload? {
-        guard let data = UserDefaults.standard.data(forKey: "warboard.watch.bars-payload.v1") else { return nil }
+        // App Group-shared with WarboardWatch (watch app + complication
+        // run in separate processes on watchOS; standard UserDefaults
+        // doesn't bridge them).
+        let suite = UserDefaults(suiteName: "group.com.tornwar.warboard.watch") ?? .standard
+        guard let data = suite.data(forKey: "warboard.watch.bars-payload.v1") else { return nil }
         return try? JSONDecoder().decode(WatchBarsPayload.self, from: data)
     }
 }

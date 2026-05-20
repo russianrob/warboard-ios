@@ -177,6 +177,10 @@ targets:
         # WarboardIOS/WatchAppIcon/Assets.xcassets. ASC validation
         # demands this Info.plist key match the compiled icon name.
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # App Group for sharing UserDefaults between WarboardWatch
+        # and WarboardWatchComplication (separate watchOS processes
+        # like iOS widget extensions; same App Group requirement).
+        CODE_SIGN_ENTITLEMENTS: WarboardIOS/Resources/WarboardWatch.entitlements
 
   WarboardWatchComplication:
     type: app-extension
@@ -197,6 +201,7 @@ targets:
         TARGETED_DEVICE_FAMILY: "4"
         DEVELOPMENT_TEAM: "DAD59U75G9"
         WATCHOS_DEPLOYMENT_TARGET: "10.0"
+        CODE_SIGN_ENTITLEMENTS: WarboardIOS/Resources/WarboardWatchComplication.entitlements
 
 # Explicit scheme so the Warboard main scheme is always created and
 # marked Shared after `xcodegen generate`. Without this block, xcodegen
