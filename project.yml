@@ -25,7 +25,7 @@ packages:
 
 settings:
   base:
-    MARKETING_VERSION: "0.5.0"
+    MARKETING_VERSION: "0.6.0"
     CURRENT_PROJECT_VERSION: "1"
     DEVELOPMENT_TEAM: "DAD59U75G9"
     CODE_SIGN_STYLE: Automatic
@@ -48,21 +48,28 @@ targets:
       - path: WarboardIOS/AppIcon/Assets.xcassets
     dependencies:
       - target: ChainWidget
-      # Watch DEFINITIVELY removed from CI paths after 2026-05-19/20
-      # experiments. Both raw xcodebuild AND fastlane gym fail at
-      # exportArchive — the bug is xcodebuild's archive classifier
-      # not recognizing xcodegen-generated paired iOS+Watch archives.
-      # Watch can only ship via Mac IDE Archive (Product → Archive
-      # button in Xcode.app) which uses Xcode's internal archive
-      # flow that writes ApplicationProperties correctly. Re-enable
-      # the WarboardWatch dependency block + scheme entries locally
-      # when doing a Mac archive that should include watch.
+      # 2026-05-20: re-enabling watch with researched fixes —
+      #   1. SKIP_INSTALL: NO on iOS app target (settings below) so
+      #      Xcode writes ApplicationProperties into the xcarchive
+      #      Info.plist (canonical fix per Apple Forums 764375).
+      #   2. PlistBuddy post-archive injection in CI (workflow step)
+      #      as a belt-and-suspenders fallback.
+      - target: WarboardWatch
+        embed: true
+        codeSign: true
       - package: SocketIO
         product: SocketIO
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tornwar.warboard
         DEVELOPMENT_TEAM: "DAD59U75G9"
+        # SKIP_INSTALL: NO is the canonical fix for "Generic Xcode
+        # Archive" misclassification when an iOS app embeds a
+        # watchOS app. Without it, xcodebuild produces an xcarchive
+        # whose Info.plist is missing the ApplicationProperties
+        # dict, and exportArchive rejects every distribution
+        # method ("expected one of {}"). See Apple Forums 764375.
+        SKIP_INSTALL: NO
         # Signing inherited from base (Automatic) — Xcode Cloud
         # manages the cert + profile itself.
         # APNs Live Activity push entitlement. The matching aps-environment
@@ -190,7 +197,8 @@ schemes:
       targets:
         Warboard: all
         ChainWidget: all
-        # Watch targets only added back for local Mac archives.
+        WarboardWatch: all
+        WarboardWatchComplication: all
     run:
       config: Debug
     archive:

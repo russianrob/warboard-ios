@@ -36,6 +36,35 @@ jobs:
       - name: Install xcodegen
         run: brew install xcodegen
 
+      - name: Patch project.yml to Manual signing (GH Actions only)
+        # Repo default is Automatic (so Xcode Cloud works). GH Actions
+        # uses pre-installed Manual profiles → patch back to Manual +
+        # re-add the per-target PROVISIONING_PROFILE_SPECIFIER lines
+        # that were stripped when we moved to Automatic globally.
+        run: |
+          sed -i.bak 's/CODE_SIGN_STYLE: Automatic/CODE_SIGN_STYLE: Manual/' project.yml
+          rm -f project.yml.bak
+          python3 <<'PY'
+          mapping = {
+              'com.tornwar.warboard': 'Warboard App Store',
+              'com.tornwar.warboard.ChainWidget': 'Warboard ChainWidget App Store',
+              'com.tornwar.warboard.watchkitapp': 'Warboard Watch App Store',
+              'com.tornwar.warboard.watchkitapp.WarboardWatchComplication': 'Warboard Watch Complication App Store',
+          }
+          with open('project.yml') as f:
+              src = f.read()
+          for bundle, profile in mapping.items():
+              needle = f'PRODUCT_BUNDLE_IDENTIFIER: {bundle}\n'
+              if needle not in src: continue
+              addition = f'        PROVISIONING_PROFILE_SPECIFIER: "{profile}"\n        CODE_SIGN_IDENTITY: "Apple Distribution"\n'
+              if 'PROVISIONING_PROFILE_SPECIFIER' in src.split(needle, 1)[1].split('\n', 4)[1]:
+                  continue
+              src = src.replace(needle, needle + addition, 1)
+          with open('project.yml', 'w') as f:
+              f.write(src)
+          print("project.yml patched for Manual signing")
+          PY
+
       - name: Generate Xcode project
         run: xcodegen generate --spec project.yml
 
@@ -145,31 +174,112 @@ jobs:
 
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
 
-      - name: Install fastlane
-        # Apple's macOS runners include Ruby + Bundler. fastlane is
-        # the gym/pilot wrapper that handles iOS+Watch archive +
-        # TestFlight upload with workarounds for the raw-xcodebuild
-        # archive-classification bug.
+      - name: Archive (Release, signed)
         if: steps.sign_check.outputs.available == 'true'
         run: |
-          sudo gem install fastlane --no-document
-          fastlane --version | head -3
+          xcodebuild archive \
+            -project Warboard.xcodeproj \
+            -scheme Warboard \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Warboard.xcarchive" \
+            MARKETING_VERSION="${{ steps.version.outputs.VERSION }}" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGNING_ALLOWED=YES \
+            OTHER_CODE_SIGN_FLAGS="--timestamp"
 
-      - name: Build + upload via fastlane
+      - name: Inject ApplicationProperties into xcarchive
+        # The xcodegen+xcodebuild archive flow for paired iOS+Watch
+        # apps produces an xcarchive whose Info.plist is missing the
+        # ApplicationProperties dict — without it, exportArchive
+        # classifies the archive as "Generic" and rejects every
+        # distribution method. We synthesize the dict here using
+        # PlistBuddy. This is workaround #3 from the research; works
+        # even if SKIP_INSTALL fix alone (in project.yml) doesn't.
+        # https://developer.apple.com/forums/thread/764375
         if: steps.sign_check.outputs.available == 'true'
-        env:
-          APP_STORE_CONNECT_API_KEY_KEY_ID:    ${{ secrets.ASC_KEY_ID }}
-          APP_STORE_CONNECT_API_KEY_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-          APP_STORE_CONNECT_API_KEY_KEY:       ${{ secrets.ASC_API_KEY_BASE64 }}
-          APP_STORE_CONNECT_API_KEY_IS_KEY_CONTENT_BASE64: "true"
-          FASTLANE_DISABLE_COLORS:             "1"
-          FASTLANE_SKIP_UPDATE_CHECK:          "1"
         run: |
-          # Run xcodegen here so fastlane sees a project. We don't
-          # commit Warboard.xcodeproj.
-          xcodegen generate --spec project.yml
-          # gym + pilot via our Fastfile.
-          fastlane ios testflight_build
+          set -e
+          ARCH="$RUNNER_TEMP/Warboard.xcarchive"
+          INFO="$ARCH/Info.plist"
+          IOS_APP="$ARCH/Products/Applications/Warboard.app"
+          IOS_INFO="$IOS_APP/Info.plist"
+          if [[ ! -f "$IOS_INFO" ]]; then
+            echo "::warning::Can't find Warboard.app Info.plist — skipping injection"
+            ls -la "$ARCH/Products/Applications" 2>/dev/null || true
+            exit 0
+          fi
+          IOS_BUNDLE_ID=$(plutil -extract CFBundleIdentifier raw "$IOS_INFO")
+          IOS_SHORT_VER=$(plutil -extract CFBundleShortVersionString raw "$IOS_INFO")
+          IOS_BUILD_VER=$(plutil -extract CFBundleVersion raw "$IOS_INFO")
+          echo "Injecting ApplicationProperties: bundle=$IOS_BUNDLE_ID short=$IOS_SHORT_VER build=$IOS_BUILD_VER"
+          # Remove any existing block, then add a fresh one.
+          /usr/libexec/PlistBuddy -c "Delete :ApplicationProperties" "$INFO" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :ApplicationProperties dict" "$INFO"
+          /usr/libexec/PlistBuddy -c "Add :ApplicationProperties:ApplicationPath string Applications/Warboard.app" "$INFO"
+          /usr/libexec/PlistBuddy -c "Add :ApplicationProperties:CFBundleIdentifier string $IOS_BUNDLE_ID" "$INFO"
+          /usr/libexec/PlistBuddy -c "Add :ApplicationProperties:CFBundleShortVersionString string $IOS_SHORT_VER" "$INFO"
+          /usr/libexec/PlistBuddy -c "Add :ApplicationProperties:CFBundleVersion string $IOS_BUILD_VER" "$INFO"
+          /usr/libexec/PlistBuddy -c "Add :ApplicationProperties:SigningIdentity string 'Apple Distribution: Robert Hay (DAD59U75G9)'" "$INFO"
+          /usr/libexec/PlistBuddy -c "Add :ApplicationProperties:Team string DAD59U75G9" "$INFO"
+          /usr/libexec/PlistBuddy -c "Add :ApplicationProperties:Architectures array" "$INFO"
+          /usr/libexec/PlistBuddy -c "Add :ApplicationProperties:Architectures:0 string arm64" "$INFO"
+          echo "Final xcarchive Info.plist:"
+          plutil -p "$INFO"
+
+      - name: Splice Watch into archive
+        if: steps.sign_check.outputs.available == 'true'
+        run: |
+          set -e
+          ARCH="$RUNNER_TEMP/Warboard.xcarchive"
+          APPS="$ARCH/Products/Applications"
+          IOS_APP="$APPS/Warboard.app"
+          WATCH_APP="$APPS/WarboardWatch.app"
+          if [[ ! -d "$WATCH_APP" ]]; then
+            echo "WarboardWatch.app not at archive top level — already embedded or missing"
+            ls -la "$APPS"
+            ls -la "$IOS_APP/Watch" 2>/dev/null && echo "(already embedded)" || true
+            exit 0
+          fi
+          mkdir -p "$IOS_APP/Watch"
+          mv "$WATCH_APP" "$IOS_APP/Watch/WarboardWatch.app"
+          codesign --force --sign "Apple Distribution: Robert Hay (DAD59U75G9)" \
+                   --deep --timestamp \
+                   "$IOS_APP"
+          echo "Spliced + re-signed"
+
+      - name: Export IPA
+        if: steps.sign_check.outputs.available == 'true'
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Warboard.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist ExportOptions.plist
+          IPA_PATH="$(find "$RUNNER_TEMP/export" -type f -name '*.ipa' -print -quit)"
+          if [[ -z "$IPA_PATH" ]]; then
+            echo "No IPA produced"; ls -la "$RUNNER_TEMP/export"; exit 1
+          fi
+          SIGNED_IPA="$RUNNER_TEMP/Warboard-${{ steps.version.outputs.VERSION }}.ipa"
+          mv "$IPA_PATH" "$SIGNED_IPA"
+          echo "SIGNED_IPA=$SIGNED_IPA" >> "$GITHUB_ENV"
+          ls -la "$SIGNED_IPA"
+
+      - name: Upload to TestFlight
+        if: steps.sign_check.outputs.available == 'true' && env.SIGNED_IPA != ''
+        env:
+          ASC_API_KEY_BASE64: ${{ secrets.ASC_API_KEY_BASE64 }}
+          ASC_KEY_ID:         ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID:      ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          KEY_DIR="$HOME/.appstoreconnect/private_keys"
+          mkdir -p "$KEY_DIR"
+          echo "$ASC_API_KEY_BASE64" | base64 --decode -o "$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8"
+          xcrun altool --upload-app \
+            --type ios \
+            --file "$SIGNED_IPA" \
+            --apiKey "$ASC_KEY_ID" \
+            --apiIssuer "$ASC_ISSUER_ID"
 
       - name: Dump xcarchive Info.plist (on failure)
         if: failure() && steps.sign_check.outputs.available == 'true'
