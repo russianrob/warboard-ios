@@ -9,8 +9,39 @@ default_platform(:ios)
 platform :ios do
   desc "Build + upload to TestFlight"
   lane :testflight_build do
-    # Regenerate project from spec — required because we don't
-    # commit Warboard.xcodeproj.
+    # Patch project.yml from Automatic→Manual signing for this CI
+    # run. The repo default is Automatic (so Xcode Cloud can manage
+    # certs itself), but GitHub Actions has pre-installed Manual
+    # profiles. Without this patch, fastlane archive fails with
+    # "No profiles found for X" on every target.
+    sh "cd .. && sed -i.bak 's/CODE_SIGN_STYLE: Automatic/CODE_SIGN_STYLE: Manual/' project.yml && rm -f project.yml.bak"
+    # Also need per-target PROVISIONING_PROFILE_SPECIFIER lines that
+    # were stripped earlier. Re-add them via a Python in-place edit
+    # since YAML restructuring with sed is risky.
+    sh <<~BASH
+      cd ..
+      python3 <<'PY'
+import re
+with open('project.yml') as f:
+    src = f.read()
+# Map target bundle ID → profile name
+mapping = {
+    'com.tornwar.warboard': 'Warboard App Store',
+    'com.tornwar.warboard.ChainWidget': 'Warboard ChainWidget App Store',
+    'com.tornwar.warboard.watchkitapp': 'Warboard Watch App Store',
+    'com.tornwar.warboard.watchkitapp.WarboardWatchComplication': 'Warboard Watch Complication App Store',
+}
+for bundle, profile in mapping.items():
+    # Insert PROVISIONING_PROFILE_SPECIFIER line right after the
+    # matching PRODUCT_BUNDLE_IDENTIFIER line.
+    needle = f'PRODUCT_BUNDLE_IDENTIFIER: {bundle}\\n'
+    replacement = needle + f'        PROVISIONING_PROFILE_SPECIFIER: "{profile}"\\n        CODE_SIGN_IDENTITY: "Apple Distribution"\\n'
+    src = src.replace(needle, replacement, 1)
+with open('project.yml', 'w') as f:
+    f.write(src)
+print('Patched project.yml: Manual signing + per-target profile specifiers')
+PY
+    BASH
     sh "cd .. && xcodegen generate --spec project.yml"
 
     # gym = build + archive + export in one shot. Manual signing
