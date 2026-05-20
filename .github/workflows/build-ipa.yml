@@ -74,9 +74,13 @@ jobs:
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF#refs/tags/v}"
           else
-            VERSION="$(date +%Y%m%d-%H%M%S)-dev"
+            # Apple requires X.Y.Z format. Derive from project.yml's
+            # MAJOR.MINOR + run_number as patch. e.g. 0.6.123
+            MAJOR_MINOR=$(grep -E '^\s+MARKETING_VERSION:' project.yml | sed -E 's/.*"([0-9]+\.[0-9]+).*/\1/' | head -1)
+            VERSION="${MAJOR_MINOR}.${{ github.run_number }}"
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Resolved VERSION=$VERSION"
 
       - name: Detect signing secrets
         id: sign_check
