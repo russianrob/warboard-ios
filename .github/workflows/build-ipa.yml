@@ -232,6 +232,34 @@ jobs:
           echo "Final xcarchive Info.plist:"
           plutil -p "$INFO"
 
+      - name: Force WKApplication into watch app Info.plist
+        # No matter what we put in project.yml or the source plist,
+        # something in the build pipeline strips WKApplication from
+        # the watch app's compiled Info.plist. ASC rejects the upload
+        # without it. PlistBuddy-inject directly into the bundle.
+        if: steps.sign_check.outputs.available == 'true'
+        run: |
+          set -e
+          ARCH="$RUNNER_TEMP/Warboard.xcarchive"
+          # Watch can be either at top level OR already embedded in
+          # Warboard.app/Watch/, depending on whether Splice ran yet.
+          for WATCH_INFO in \
+            "$ARCH/Products/Applications/WarboardWatch.app/Info.plist" \
+            "$ARCH/Products/Applications/Warboard.app/Watch/WarboardWatch.app/Info.plist"
+          do
+            if [[ -f "$WATCH_INFO" ]]; then
+              echo "Patching $WATCH_INFO"
+              /usr/libexec/PlistBuddy -c "Delete :WKApplication" "$WATCH_INFO" 2>/dev/null || true
+              /usr/libexec/PlistBuddy -c "Add :WKApplication bool true" "$WATCH_INFO"
+              /usr/libexec/PlistBuddy -c "Delete :WKWatchOnly" "$WATCH_INFO" 2>/dev/null || true
+              /usr/libexec/PlistBuddy -c "Add :WKWatchOnly bool false" "$WATCH_INFO"
+              /usr/libexec/PlistBuddy -c "Delete :WKCompanionAppBundleIdentifier" "$WATCH_INFO" 2>/dev/null || true
+              /usr/libexec/PlistBuddy -c "Add :WKCompanionAppBundleIdentifier string com.tornwar.warboard" "$WATCH_INFO"
+              echo "Confirmed WKApplication:"
+              /usr/libexec/PlistBuddy -c "Print :WKApplication" "$WATCH_INFO"
+            fi
+          done
+
       - name: Splice Watch into archive
         if: steps.sign_check.outputs.available == 'true'
         run: |
@@ -248,10 +276,15 @@ jobs:
           fi
           mkdir -p "$IOS_APP/Watch"
           mv "$WATCH_APP" "$IOS_APP/Watch/WarboardWatch.app"
+          # Re-run WKApplication injection on the new path too in
+          # case the previous step ran before splice.
+          NEW_WATCH_INFO="$IOS_APP/Watch/WarboardWatch.app/Info.plist"
+          /usr/libexec/PlistBuddy -c "Delete :WKApplication" "$NEW_WATCH_INFO" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :WKApplication bool true" "$NEW_WATCH_INFO"
           codesign --force --sign "Apple Distribution: Robert Hay (DAD59U75G9)" \
                    --deep --timestamp \
                    "$IOS_APP"
-          echo "Spliced + re-signed"
+          echo "Spliced + re-signed (WKApplication confirmed)"
 
       - name: Export IPA
         if: steps.sign_check.outputs.available == 'true'
