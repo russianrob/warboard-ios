@@ -246,8 +246,11 @@ jobs:
               /usr/libexec/PlistBuddy -c "Delete :NSExtension" "$COMP_INFO" 2>/dev/null || true
               /usr/libexec/PlistBuddy -c "Add :NSExtension dict" "$COMP_INFO"
               /usr/libexec/PlistBuddy -c "Add :NSExtension:NSExtensionPointIdentifier string com.apple.widgetkit-extension" "$COMP_INFO"
-              echo "Confirmed NSExtensionPointIdentifier:"
+              /usr/libexec/PlistBuddy -c "Delete :CFBundleDisplayName" "$COMP_INFO" 2>/dev/null || true
+              /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string 'Warboard Status'" "$COMP_INFO"
+              echo "Confirmed NSExtensionPointIdentifier + CFBundleDisplayName:"
               /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPointIdentifier" "$COMP_INFO"
+              /usr/libexec/PlistBuddy -c "Print :CFBundleDisplayName" "$COMP_INFO"
             fi
           done
 
