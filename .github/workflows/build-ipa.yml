@@ -254,6 +254,26 @@ jobs:
             fi
           done
 
+      - name: Diagnose watch bundle contents
+        if: steps.sign_check.outputs.available == 'true'
+        run: |
+          ARCH="$RUNNER_TEMP/Warboard.xcarchive"
+          echo "=== Top-level Applications ==="
+          ls -la "$ARCH/Products/Applications/" 2>/dev/null
+          for WATCH in \
+            "$ARCH/Products/Applications/WarboardWatch.app" \
+            "$ARCH/Products/Applications/Warboard.app/Watch/WarboardWatch.app"
+          do
+            if [[ -d "$WATCH" ]]; then
+              echo ""
+              echo "=== Contents of $WATCH ==="
+              ls -la "$WATCH"
+              echo ""
+              echo "=== Assets.car (if exists) ==="
+              ls -la "$WATCH/Assets.car" 2>/dev/null || echo "(no Assets.car)"
+            fi
+          done
+
       - name: Force WKApplication into watch app Info.plist
         # No matter what we put in project.yml or the source plist,
         # something in the build pipeline strips WKApplication from
