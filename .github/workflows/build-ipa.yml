@@ -279,12 +279,15 @@ jobs:
           KEY_DIR="$HOME/.appstoreconnect/private_keys"
           mkdir -p "$KEY_DIR"
           echo "$ASC_API_KEY_BASE64" | base64 --decode -o "$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8"
-          xcrun altool --upload-package "$SIGNED_IPA" \
+          # Note: --upload-app + --type ios + --apiKey is the
+          # documented form; the "cannot determine platform" error
+          # before fix was because the archive lacked the embedded
+          # Watch metadata that hints at platform. Now that the watch
+          # app is properly embedded (Warboard.app/Watch/...) the
+          # platform should be auto-detected.
+          xcrun altool --upload-app \
             --type ios \
-            --apple-id "com.tornwar.warboard" \
-            --bundle-id "com.tornwar.warboard" \
-            --bundle-short-version-string "${{ steps.version.outputs.VERSION }}" \
-            --bundle-version "${{ github.run_number }}" \
+            --file "$SIGNED_IPA" \
             --apiKey "$ASC_KEY_ID" \
             --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tee altool.log
           if grep -qE "UPLOAD FAILED|Validation failed|ERROR ITMS-|ERROR:" altool.log; then
