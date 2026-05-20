@@ -232,6 +232,25 @@ jobs:
           echo "Final xcarchive Info.plist:"
           plutil -p "$INFO"
 
+      - name: Force NSExtensionPointIdentifier into complication Info.plist
+        if: steps.sign_check.outputs.available == 'true'
+        run: |
+          set -e
+          ARCH="$RUNNER_TEMP/Warboard.xcarchive"
+          for COMP_INFO in \
+            "$ARCH/Products/Applications/WarboardWatch.app/PlugIns/WarboardWatchComplication.appex/Info.plist" \
+            "$ARCH/Products/Applications/Warboard.app/Watch/WarboardWatch.app/PlugIns/WarboardWatchComplication.appex/Info.plist"
+          do
+            if [[ -f "$COMP_INFO" ]]; then
+              echo "Patching $COMP_INFO"
+              /usr/libexec/PlistBuddy -c "Delete :NSExtension" "$COMP_INFO" 2>/dev/null || true
+              /usr/libexec/PlistBuddy -c "Add :NSExtension dict" "$COMP_INFO"
+              /usr/libexec/PlistBuddy -c "Add :NSExtension:NSExtensionPointIdentifier string com.apple.widgetkit-extension" "$COMP_INFO"
+              echo "Confirmed NSExtensionPointIdentifier:"
+              /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPointIdentifier" "$COMP_INFO"
+            fi
+          done
+
       - name: Force WKApplication into watch app Info.plist
         # No matter what we put in project.yml or the source plist,
         # something in the build pipeline strips WKApplication from
