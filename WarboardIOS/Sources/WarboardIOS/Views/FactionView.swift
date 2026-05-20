@@ -266,23 +266,6 @@ private struct MemberRow: View {
                     .foregroundColor(ageColor).font(.caption2)
             }
             BarStripe(label: "E", current: member.energy[0], max: member.energy[1], color: .cyan)
-            BarStripe(label: "N", current: member.nerve[0],  max: member.nerve[1],  color: .red)
-            BarStripe(label: "H", current: member.happy[0],  max: member.happy[1],  color: .yellow)
-            if member.life[0] < member.life[1] {
-                BarStripe(label: "L", current: member.life[0], max: member.life[1], color: .green)
-            }
-            // Cooldown chips inline
-            let cdLabels: [String] = {
-                var out: [String] = []
-                if member.drugSec > 0    { out.append("Drug \(formatDur(Int(member.drugSec)))") }
-                if member.medicalSec > 0 { out.append("Med \(formatDur(Int(member.medicalSec)))") }
-                if member.boosterSec > 0 { out.append("Boost \(formatDur(Int(member.boosterSec)))") }
-                return out
-            }()
-            if !cdLabels.isEmpty {
-                Text(cdLabels.joined(separator: " · "))
-                    .foregroundStyle(.secondary).font(.caption2)
-            }
         }
         .padding(.vertical, 4)
         .sheet(item: $sheet) { $0 }
