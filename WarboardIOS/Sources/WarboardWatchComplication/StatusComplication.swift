@@ -137,17 +137,22 @@ private struct Circular: View {
         guard let p = entry.payload, p.nerveMax > 0 else { return 0 }
         return Swift.min(1, Swift.max(0, CGFloat(p.nerveCurrent) / CGFloat(p.nerveMax)))
     }
-    // For cooldowns: fraction = time elapsed since written / total
-    // window. Ring fills as cooldown progresses; full ring = ready.
-    // 0 deadline = no active cooldown → empty ring.
+    // Cooldown ring fills when fresh (lots of time remaining), drains
+    // toward 0 as the timer counts down. Ready = empty ring.
+    // We don't know the original total cooldown duration (Torn never
+    // tells us), so use (deadline - writtenAtMs) as the baseline:
+    // when BarReporter first saw the cooldown, the ring was 100%;
+    // every second after, it drains proportionally. If writtenAtMs
+    // is stale, fall back to a 12h max so the ring still drains
+    // smoothly.
     private func cooldownFrac(deadline: Int64) -> CGFloat {
-        guard deadline > 0, let p = entry.payload, p.writtenAtMs > 0 else { return 0 }
+        guard deadline > 0, let p = entry.payload else { return 0 }
         let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
-        if nowMs >= deadline { return 1 }
-        let total = deadline - p.writtenAtMs
-        if total <= 0 { return 1 }
-        let elapsed = nowMs - p.writtenAtMs
-        return Swift.min(1, Swift.max(0, CGFloat(elapsed) / CGFloat(total)))
+        if nowMs >= deadline { return 0 }
+        let remaining = deadline - nowMs
+        var total = deadline - p.writtenAtMs
+        if total <= 0 { total = 12 * 3600 * 1000 } // fallback: 12h window
+        return Swift.min(1, Swift.max(0, CGFloat(remaining) / CGFloat(total)))
     }
 }
 
