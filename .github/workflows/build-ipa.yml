@@ -290,8 +290,13 @@ jobs:
           # which platform to upload as). Pinning to the iOS bundle
           # ID makes it treat the package as an iOS app with embedded
           # watch.
+          # App Store Connect numeric Apple ID for com.tornwar.warboard.
+          # Not sensitive — visible to anyone who looks at the app's
+          # public listing. Hardcoded so future builds don't need a
+          # secret round-trip.
           xcrun altool --upload-app \
             --type ios \
+            --apple-id "6764058849" \
             --bundle-id "com.tornwar.warboard" \
             --bundle-short-version-string "${{ steps.version.outputs.VERSION }}" \
             --bundle-version "${{ github.run_number }}" \
