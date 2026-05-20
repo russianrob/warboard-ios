@@ -27,6 +27,7 @@ final class StatusLiveActivityController {
     /// to re-register with the server when it changes, else the next
     /// server push goes to a dead token.
     private var pushTokenTask: Task<Void, Never>?
+    private var contentUpdatesTask: Task<Void, Never>?
     /// Cached so reSubscribe (token rotation) can re-POST without the
     /// caller having to pass them again.
     private var lastBaseUrl: String = ""
@@ -107,6 +108,8 @@ final class StatusLiveActivityController {
     func stop() {
         pushTokenTask?.cancel()
         pushTokenTask = nil
+        contentUpdatesTask?.cancel()
+        contentUpdatesTask = nil
         if !lastBaseUrl.isEmpty, !lastJwt.isEmpty {
             Task { await Self.unregisterWithServer(baseUrl: lastBaseUrl, jwt: lastJwt) }
         }
@@ -147,6 +150,27 @@ final class StatusLiveActivityController {
                     apiKey: self.lastApiKey,
                     token: hex
                 )
+            }
+        }
+        // Mirror server-pushed ContentState updates into BarsCache so
+        // the home-screen widget refreshes at the LA's 2-min cadence
+        // instead of the BarReporter's 10-min cadence. ActivityKit
+        // delivers contentUpdates whenever APNs lands a new state,
+        // without our app needing to do any Torn API call.
+        contentUpdatesTask?.cancel()
+        contentUpdatesTask = Task { [weak self] in
+            for await content in activity.contentUpdates {
+                guard self != nil else { return }
+                let s = content.state
+                BarsCache.write(BarsCache.Snapshot(
+                    energyCurrent: s.energyCurrent,
+                    energyMax:     s.energyMax,
+                    nerveCurrent:  s.nerveCurrent,
+                    nerveMax:      s.nerveMax,
+                    drugDeadlineMs:    s.drugDeadlineMs,
+                    boosterDeadlineMs: s.boosterDeadlineMs,
+                    writtenAtMs: s.writtenAtMs
+                ))
             }
         }
     }
