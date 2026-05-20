@@ -48,14 +48,15 @@ targets:
       - path: WarboardIOS/AppIcon/Assets.xcassets
     dependencies:
       - target: ChainWidget
-      - target: WarboardWatch
-        # Build order only — embedding is done as a post-archive CI
-        # step (.github/workflows/build-ipa.yml: "Splice Watch into
-        # archive") because xcodegen's embed:true + postBuildScripts
-        # both produced archives that exportArchive rejected as
-        # "Unknown Distribution Error". The CI splice physically moves
-        # WarboardWatch.app into Warboard.app/Watch/ and re-signs.
-        embed: false
+      # WarboardWatch + WarboardWatchComplication are TEMPORARILY
+      # removed from the iOS app's dependencies (2026-05-19) because
+      # xcodegen-generated archives don't carry the iOS+Watch
+      # metadata that exportArchive needs, so CI builds fail with
+      # "Unknown Distribution Error". The Mac IDE archives them fine
+      # — only CI is broken. Both targets remain in the project
+      # (still build as standalone) but the iOS .ipa won't include
+      # the watch app until embedding is fixed. Bring back in a
+      # later release once we have a working approach.
       - package: SocketIO
         product: SocketIO
     settings:
@@ -189,8 +190,8 @@ schemes:
       targets:
         Warboard: all
         ChainWidget: all
-        WarboardWatch: all
-        WarboardWatchComplication: all
+        # Watch targets removed from the iOS scheme to keep the
+        # archive iOS-only (see WarboardWatch dependency comment above).
     run:
       config: Debug
     archive:
