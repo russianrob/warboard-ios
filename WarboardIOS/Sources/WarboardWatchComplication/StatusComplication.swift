@@ -47,11 +47,14 @@ private struct Provider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<StatusEntry>) -> Void) {
         let payload = load()
         let now = Date()
-        let entries = [
-            StatusEntry(date: now, payload: payload),
-            StatusEntry(date: now.addingTimeInterval(5 * 60), payload: payload),
-        ]
-        completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(5 * 60))))
+        // Request more frequent reloads (every 2 min) so watchOS has
+        // a chance to refresh sooner — Apple still throttles via the
+        // complication reload budget but asking for sooner gives us
+        // first-in-line when budget regenerates.
+        let entries = (0..<5).map { i in
+            StatusEntry(date: now.addingTimeInterval(Double(i) * 120), payload: payload)
+        }
+        completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(120))))
     }
     private func load() -> WatchBarsPayload? {
         // App Group-shared with WarboardWatch (watch app + complication
