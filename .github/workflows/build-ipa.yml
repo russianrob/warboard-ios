@@ -287,6 +287,7 @@ jobs:
           # platform should be auto-detected.
           xcrun altool --upload-app \
             --type ios \
+            --platform ios \
             --file "$SIGNED_IPA" \
             --apiKey "$ASC_KEY_ID" \
             --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tee altool.log
