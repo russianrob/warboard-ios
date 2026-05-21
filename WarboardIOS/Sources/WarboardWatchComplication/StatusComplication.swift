@@ -45,16 +45,19 @@ private struct Provider: TimelineProvider {
         completion(StatusEntry(date: .now, payload: load()))
     }
     func getTimeline(in context: Context, completion: @escaping (Timeline<StatusEntry>) -> Void) {
+        // Return only ONE entry with current data. Earlier version
+        // returned 5 pre-baked entries at 2-min intervals — all with
+        // the same payload (loaded once at provider-call time), so
+        // the complication rendered stale data for 10 min until the
+        // next reload. With ONE entry + .after policy, WidgetKit
+        // calls getTimeline() again in 2 min, which re-reads fresh
+        // data from the App Group suite.
         let payload = load()
         let now = Date()
-        // Request more frequent reloads (every 2 min) so watchOS has
-        // a chance to refresh sooner — Apple still throttles via the
-        // complication reload budget but asking for sooner gives us
-        // first-in-line when budget regenerates.
-        let entries = (0..<5).map { i in
-            StatusEntry(date: now.addingTimeInterval(Double(i) * 120), payload: payload)
-        }
-        completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(120))))
+        completion(Timeline(
+            entries: [StatusEntry(date: now, payload: payload)],
+            policy: .after(now.addingTimeInterval(120))
+        ))
     }
     private func load() -> WatchBarsPayload? {
         // App Group-shared with WarboardWatch (watch app + complication
