@@ -51,6 +51,11 @@ final class BarReporter: ObservableObject {
         let attacks = await attacksTask
 
         if let snap = snap, snap.error == nil {
+            // (Re)schedule the user's bar/cooldown "ready" alerts off the
+            // fresh fill-times. Local + time-triggered, so they fire even
+            // when the app is closed.
+            BarNotificationScheduler.schedule(from: snap, prefs: prefs)
+
             await WarboardAPI.reportMyBars(baseUrl: prefs.baseUrl, jwt: a.token, snap: snap)
             // Mirror the snap into the App Group-shared cache so the
             // home-screen Status widget renders the same bars +

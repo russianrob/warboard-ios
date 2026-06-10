@@ -9,10 +9,15 @@ import WarboardIOS
 /// WarboardIOSApp pushes to WatchSyncController every cycle regardless of
 /// which view is mounted), so this shell does not affect the watch.
 struct ContentView: View {
+    @State private var showNotifications = false
+
     var body: some View {
-        BrowserView()
+        BrowserView(onShowNotifications: { showNotifications = true })
             // App-wide shout banner — listens to RealtimeClient.globalToast
             // so a broadcast surfaces over the browser.
             .overlay(alignment: .top) { ShoutToastOverlay() }
+            .sheet(isPresented: $showNotifications) {
+                NavigationStack { NotificationSettingsView() }
+            }
     }
 }

@@ -21,6 +21,11 @@ final class PrefsStore: ObservableObject {
     private static let kStatsFilterMax = "warboard.statsFilterMax"
     private static let kHideOnline = "warboard.hideOnline"
     private static let kHideOffline = "warboard.hideOffline"
+    private static let kNotifyEnergy = "warboard.notify.energy"
+    private static let kNotifyNerve = "warboard.notify.nerve"
+    private static let kNotifyDrug = "warboard.notify.drug"
+    private static let kNotifyBooster = "warboard.notify.booster"
+    private static let kNotifyMedical = "warboard.notify.medical"
 
     @Published var apiKey: String { didSet { defaults.set(apiKey, forKey: Self.kApiKey) } }
     @Published var baseUrl: String { didSet { defaults.set(baseUrl, forKey: Self.kBaseUrl) } }
@@ -43,6 +48,13 @@ final class PrefsStore: ObservableObject {
     @Published var statsFilterMax: String { didSet { defaults.set(statsFilterMax, forKey: Self.kStatsFilterMax) } }
     @Published var hideOnline: Bool { didSet { defaults.set(hideOnline, forKey: Self.kHideOnline) } }
     @Published var hideOffline: Bool { didSet { defaults.set(hideOffline, forKey: Self.kHideOffline) } }
+    /// Bar/cooldown "ready" alert opt-ins. Scheduled as local notifications
+    /// from the user's bar fill-times. All default ON.
+    @Published var notifyEnergy: Bool { didSet { defaults.set(notifyEnergy, forKey: Self.kNotifyEnergy) } }
+    @Published var notifyNerve: Bool { didSet { defaults.set(notifyNerve, forKey: Self.kNotifyNerve) } }
+    @Published var notifyDrug: Bool { didSet { defaults.set(notifyDrug, forKey: Self.kNotifyDrug) } }
+    @Published var notifyBooster: Bool { didSet { defaults.set(notifyBooster, forKey: Self.kNotifyBooster) } }
+    @Published var notifyMedical: Bool { didSet { defaults.set(notifyMedical, forKey: Self.kNotifyMedical) } }
 
     /// v0.4.60: switched default to App Group-shared UserDefaults so
     /// the home-screen Status widget can read the same prefs the main
@@ -67,6 +79,11 @@ final class PrefsStore: ObservableObject {
         self.statsFilterMax = defaults.string(forKey: Self.kStatsFilterMax) ?? ""
         self.hideOnline = defaults.object(forKey: Self.kHideOnline) as? Bool ?? false
         self.hideOffline = defaults.object(forKey: Self.kHideOffline) as? Bool ?? false
+        self.notifyEnergy = defaults.object(forKey: Self.kNotifyEnergy) as? Bool ?? true
+        self.notifyNerve = defaults.object(forKey: Self.kNotifyNerve) as? Bool ?? true
+        self.notifyDrug = defaults.object(forKey: Self.kNotifyDrug) as? Bool ?? true
+        self.notifyBooster = defaults.object(forKey: Self.kNotifyBooster) as? Bool ?? true
+        self.notifyMedical = defaults.object(forKey: Self.kNotifyMedical) as? Bool ?? true
     }
 
     // JWT cache helpers — accessed by AuthRepository, not the UI.

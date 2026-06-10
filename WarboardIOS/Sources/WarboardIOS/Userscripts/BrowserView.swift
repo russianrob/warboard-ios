@@ -112,6 +112,13 @@ private struct BrowserWebView: UIViewRepresentable {
         // controller's navigation delegate.
         context.coordinator.observe(wv)
 
+        // Pull-to-refresh on the page itself (Safari-style). The coordinator
+        // ends the spinner when isLoading drops back to false.
+        let refresh = UIRefreshControl()
+        refresh.addTarget(context.coordinator, action: #selector(Coordinator.handleRefresh), for: .valueChanged)
+        wv.scrollView.refreshControl = refresh
+        context.coordinator.refreshControl = refresh
+
         model.attach(wv)
         return wv
     }
@@ -127,7 +134,12 @@ private struct BrowserWebView: UIViewRepresentable {
     final class Coordinator: NSObject {
         let model: BrowserModel
         private var observations: [NSKeyValueObservation] = []
+        weak var refreshControl: UIRefreshControl?
         init(model: BrowserModel) { self.model = model }
+
+        @objc func handleRefresh() {
+            Task { @MainActor in model.reload() }
+        }
 
         func observe(_ wv: WKWebView) {
             observations = [
@@ -140,12 +152,13 @@ private struct BrowserWebView: UIViewRepresentable {
                 wv.observe(\.estimatedProgress, options: [.new]) { [weak model] w, _ in
                     Task { @MainActor in model?.progress = w.estimatedProgress }
                 },
-                wv.observe(\.isLoading, options: [.initial, .new]) { [weak model] w, _ in
+                wv.observe(\.isLoading, options: [.initial, .new]) { [weak self, weak model] w, _ in
                     Task { @MainActor in
                         model?.isLoading = w.isLoading
                         // Always surface the bar when a new page starts so the
                         // user can see/redirect where they're going.
                         if w.isLoading { model?.chromeVisible = true }
+                        else { self?.refreshControl?.endRefreshing() }
                     }
                 },
                 wv.observe(\.canGoBack, options: [.initial, .new]) { [weak model] w, _ in
@@ -171,7 +184,14 @@ private struct BrowserWebView: UIViewRepresentable {
 /// The Browser tab: a navigable WKWebView with a URL bar, back/forward/
 /// reload, and a determinate progress bar, hosting the userscript engine.
 public struct BrowserView: View {
-    public init() {}
+    /// Invoked when the user taps "Notifications…" in the page menu. The app
+    /// shell wires this to its Notifications settings screen — the screen
+    /// lives in the app target (it needs PrefsStore), which this framework
+    /// can't import, so it comes in as a closure.
+    private let onShowNotifications: (() -> Void)?
+    public init(onShowNotifications: (() -> Void)? = nil) {
+        self.onShowNotifications = onShowNotifications
+    }
     @StateObject private var model = BrowserModel()
     @State private var showScripts = false
 
@@ -234,10 +254,16 @@ public struct BrowserView: View {
                 Image(systemName: model.isLoading ? "xmark" : "arrow.clockwise")
             }
 
-            // Per-page script actions (GM_registerMenuCommand). The
-            // controller publishes the live command list for the current
+            // App actions + per-page script actions (GM_registerMenuCommand).
+            // The controller publishes the live command list for the current
             // page; the menu invokes them by id back through the bridge.
             Menu {
+                if let onShowNotifications {
+                    Button { onShowNotifications() } label: {
+                        Label("Notifications…", systemImage: "bell")
+                    }
+                    Divider()
+                }
                 if controller.menuCommands.isEmpty {
                     Text("No script actions").foregroundStyle(.secondary)
                 }
