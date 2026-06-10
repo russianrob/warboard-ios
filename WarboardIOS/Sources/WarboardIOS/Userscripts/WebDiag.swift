@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking   // URLSession lives here on Linux
+#endif
 
 /// Fire-and-forget diagnostic POSTer for the in-app browser. Mirrors the
 /// userscripts' `/api/debug/client-log` shape so webview events land in the
