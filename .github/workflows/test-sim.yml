@@ -42,8 +42,13 @@ jobs:
       - name: Run engine unit tests on the simulator
         run: |
           set -o pipefail
+          # GMBridgeIntegrationTests drives a live WKWebView, which can't load
+          # content in a host-less logic-test bundle (no app host) — its bridge
+          # logic is covered by the pure unit tests + validated on-device. Skip
+          # running it here while still compiling it.
           xcodebuild test \
             -project Warboard.xcodeproj \
             -scheme WarboardIOSTests \
             -destination "id=${{ steps.sim.outputs.udid }}" \
+            -skip-testing:WarboardIOSTests/GMBridgeIntegrationTests \
             CODE_SIGNING_ALLOWED=NO
