@@ -30,6 +30,8 @@ struct TornChatWebView: View {
 private struct WKWebViewRepresentable: UIViewRepresentable {
     private let url = URL(string: "https://www.torn.com/index.php")!
 
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()        // persistent cookies + storage
@@ -38,9 +40,25 @@ private struct WKWebViewRepresentable: UIViewRepresentable {
         let wv = WKWebView(frame: .zero, configuration: config)
         wv.allowsBackForwardNavigationGestures = true
         wv.scrollView.contentInsetAdjustmentBehavior = .always
+        wv.uiDelegate = context.coordinator         // make target=_blank links work
         wv.load(URLRequest(url: url))
         return wv
     }
 
     func updateUIView(_ uiView: WKWebView, context: Context) {}
+
+    /// Torn's chat links (profiles, items) open with `target="_blank"` /
+    /// `window.open`. Without a WKUIDelegate the WebView drops those, so the
+    /// links look unclickable. Load them in this same view instead.
+    final class Coordinator: NSObject, WKUIDelegate {
+        func webView(_ webView: WKWebView,
+                     createWebViewWith configuration: WKWebViewConfiguration,
+                     for navigationAction: WKNavigationAction,
+                     windowFeatures: WKWindowFeatures) -> WKWebView? {
+            if navigationAction.request.url != nil {
+                webView.load(navigationAction.request)
+            }
+            return nil
+        }
+    }
 }

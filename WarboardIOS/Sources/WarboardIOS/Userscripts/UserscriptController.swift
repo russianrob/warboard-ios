@@ -159,9 +159,25 @@ extension UserscriptController {
     func makeWebView() -> WKWebView {
         let wv = WKWebView(frame: .zero, configuration: configuration)
         wv.navigationDelegate = self
+        wv.uiDelegate = self
         wv.allowsBackForwardNavigationGestures = true
         wv.scrollView.contentInsetAdjustmentBehavior = .always
         self.webView = wv
         return wv
+    }
+}
+
+extension UserscriptController: WKUIDelegate {
+    /// target=_blank / window.open links (Torn chat profile/item links) open
+    /// no window by default in WKWebView — load them in the same view so they
+    /// don't look unclickable.
+    func webView(_ webView: WKWebView,
+                 createWebViewWith configuration: WKWebViewConfiguration,
+                 for navigationAction: WKNavigationAction,
+                 windowFeatures: WKWindowFeatures) -> WKWebView? {
+        if navigationAction.request.url != nil {
+            webView.load(navigationAction.request)
+        }
+        return nil
     }
 }
