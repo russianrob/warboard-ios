@@ -1,0 +1,45 @@
+#   Runs the userscript-engine unit tests on an iOS Simulator (macOS runner).
+#   This is the Mac-side verifier for the WebKit/SwiftUI work that can't be
+#   built on Linux. Triggers on the feature branch + manual dispatch only —
+#   NOT main/tags, so it never touches the TestFlight archive pipeline.
+name: sim-test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - userscript-host-ui
+
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select newest Xcode
+        run: |
+          NEWEST="$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)"
+          sudo xcode-select -s "$NEWEST/Contents/Developer"
+          xcodebuild -version
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Generate project
+        run: xcodegen generate --spec project.yml
+
+      - name: Pick a simulator
+        id: sim
+        run: |
+          UDID="$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; ids=[dev['udid'] for rt in d for dev in d[rt] if dev.get('isAvailable') and 'iPhone' in dev.get('name','')]; print(ids[0] if ids else '')")"
+          echo "Picked simulator: $UDID"
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Run engine unit tests on the simulator
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Warboard.xcodeproj \
+            -scheme WarboardIOSTests \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            CODE_SIGNING_ALLOWED=NO

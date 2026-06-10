@@ -203,6 +203,38 @@ targets:
         WATCHOS_DEPLOYMENT_TARGET: "10.0"
         CODE_SIGN_ENTITLEMENTS: WarboardIOS/Resources/WarboardWatchComplication.entitlements
 
+  # Userscript engine as its own framework so the SAME `@testable import
+  # WarboardIOS` resolves on Mac (framework module) as on Linux (SwiftPM
+  # lib). Sources = Userscripts/ only; WebKit/SwiftUI engine files added
+  # in the Mac phase compile here (frameworks can import WebKit). The
+  # SwiftPM Package.swift mirrors this target for headless Linux tests.
+  WarboardIOS:
+    type: framework
+    platform: iOS
+    sources:
+      - path: WarboardIOS/Sources/WarboardIOS/Userscripts
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tornwar.warboard.engine
+        PRODUCT_MODULE_NAME: WarboardIOS
+        DEVELOPMENT_TEAM: "DAD59U75G9"
+        GENERATE_INFOPLIST_FILE: "YES"
+
+  # Unit-test bundle for the engine. Logic tests (no host app) so the
+  # test build pulls in only the framework — no app/watch/signing.
+  WarboardIOSTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: WarboardIOS/Tests/WarboardIOSTests
+    dependencies:
+      - target: WarboardIOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tornwar.warboard.tests
+        DEVELOPMENT_TEAM: "DAD59U75G9"
+        GENERATE_INFOPLIST_FILE: "YES"
+
 # Explicit scheme so the Warboard main scheme is always created and
 # marked Shared after `xcodegen generate`. Without this block, xcodegen
 # auto-generated schemes for the extension/watch targets but skipped
@@ -229,3 +261,11 @@ schemes:
       config: Debug
     test:
       config: Debug
+  WarboardIOSTests:
+    build:
+      targets:
+        WarboardIOSTests: [test]
+    test:
+      config: Debug
+      targets:
+        - WarboardIOSTests
