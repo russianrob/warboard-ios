@@ -1,4 +1,5 @@
 import SwiftUI
+import WarboardIOS
 
 /// Top-tab navigation — same five sections that the Android app's
 /// bottom-nav surfaces, but positioned at the TOP of the screen on
@@ -32,12 +33,20 @@ struct ContentView: View {
                     .opacity(selected == .war ? 1 : 0)
                     .allowsHitTesting(selected == .war)
 
+                NavigationStack { BrowserView() }
+                    .opacity(selected == .browser ? 1 : 0)
+                    .allowsHitTesting(selected == .browser)
+
                 // Faction tab is always visible — members need the vault
                 // submit form to request money. Admin tools inside are
                 // gated by FactionView itself.
                 NavigationStack { FactionView() }
                     .opacity(selected == .faction ? 1 : 0)
                     .allowsHitTesting(selected == .faction)
+
+                NavigationStack { ScriptsView() }
+                    .opacity(selected == .scripts ? 1 : 0)
+                    .allowsHitTesting(selected == .scripts)
 
                 // Owner-only OC Manager. Mount only when allowed so
                 // non-owner installs don't pay for its networking; the
@@ -70,13 +79,15 @@ struct ContentView: View {
 /// Top tabs identified by stable enum so opacity gating + segment
 /// rendering stay in sync.
 enum WBTab: String, CaseIterable, Identifiable {
-    case status, war, faction, oc, settings
+    case status, war, browser, faction, scripts, oc, settings
     var id: String { rawValue }
     var label: String {
         switch self {
         case .status:   return "Status"
         case .war:      return "War"
+        case .browser:  return "Browser"
         case .faction:  return "Faction"
+        case .scripts:  return "Scripts"
         case .oc:       return "OC"
         case .settings: return "Settings"
         }
@@ -85,7 +96,9 @@ enum WBTab: String, CaseIterable, Identifiable {
         switch self {
         case .status:   return "speedometer"
         case .war:      return "flame.fill"
+        case .browser:  return "globe"
         case .faction:  return "person.3.fill"
+        case .scripts:  return "doc.text.fill"
         case .oc:       return "person.3.sequence.fill"
         case .settings: return "gear"
         }

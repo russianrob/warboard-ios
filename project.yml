@@ -39,6 +39,8 @@ targets:
     platform: iOS
     sources:
       - path: WarboardIOS/Sources/WarboardIOS
+        excludes:
+          - "Userscripts"
       - path: WarboardIOS/Sources/Shared
       # Asset catalog goes in `sources` (not `resources`) so xcodegen
       # adds it to the Compile Sources build phase, which actool then
@@ -47,6 +49,7 @@ targets:
       # iOS only loads icons from a compiled Assets.car.
       - path: WarboardIOS/AppIcon/Assets.xcassets
     dependencies:
+      - target: WarboardIOS
       - target: ChainWidget
       # 2026-05-20: re-enabling watch with researched fixes —
       #   1. SKIP_INSTALL: NO on iOS app target (settings below) so

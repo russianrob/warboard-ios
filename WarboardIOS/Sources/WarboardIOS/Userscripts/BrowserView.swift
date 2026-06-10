@@ -130,7 +130,8 @@ private struct BrowserWebView: UIViewRepresentable {
 
 /// The Browser tab: a navigable WKWebView with a URL bar, back/forward/
 /// reload, and a determinate progress bar, hosting the userscript engine.
-struct BrowserView: View {
+public struct BrowserView: View {
+    public init() {}
     @StateObject private var model = BrowserModel()
 
     /// One controller instance per Browser tab, built from the default

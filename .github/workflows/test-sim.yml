@@ -52,3 +52,12 @@ jobs:
             -destination "id=${{ steps.sim.outputs.udid }}" \
             -skip-testing:WarboardIOSTests/GMBridgeIntegrationTests \
             CODE_SIGNING_ALLOWED=NO
+
+      - name: Build the full app (verifies the userscript-host tabs compile)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Warboard.xcodeproj \
+            -scheme Warboard \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            CODE_SIGNING_ALLOWED=NO

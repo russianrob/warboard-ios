@@ -147,7 +147,8 @@ final class ScriptsViewModel: ObservableObject {
     }
 }
 
-struct ScriptsView: View {
+public struct ScriptsView: View {
+    public init() {}
     @StateObject private var vm = ScriptsViewModel()
 
     var body: some View {
