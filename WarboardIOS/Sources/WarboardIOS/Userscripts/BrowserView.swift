@@ -148,6 +148,9 @@ public struct BrowserView: View {
         }
         .navigationTitle("Browser")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $controller.pendingInstall) { item in
+            InstallScriptView(url: item.url) { controller.pendingInstall = nil }
+        }
     }
 
     private var urlBar: some View {

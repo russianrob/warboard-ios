@@ -19,6 +19,18 @@ final class UserscriptController: NSObject, ObservableObject {
     /// each navigation rebuild; published so the URL-bar menu re-renders.
     @Published private(set) var menuCommands: [MenuCommand] = []
 
+    /// A `.user.js` URL the Browser tab navigated to, captured so SwiftUI can
+    /// present the install-confirmation sheet. `Identifiable` drives
+    /// `.sheet(item:)`; nil-ed when the sheet is dismissed.
+    struct PendingInstall: Identifiable {
+        let id = UUID()
+        let url: URL
+    }
+
+    /// Set when a main-frame navigation targets a `.user.js`; the navigation is
+    /// cancelled and BrowserView shows the install sheet instead.
+    @Published var pendingInstall: PendingInstall?
+
     private let registry: ScriptRegistry
     private let requireCache: RequireCache
     private let gmBridge: GMBridge
@@ -141,6 +153,17 @@ extension UserscriptController: WKNavigationDelegate {
         decidePolicyFor navigationAction: WKNavigationAction,
         decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
     ) {
+        // A main-frame hit on a `.user.js` is an install request, not a page to
+        // render: cancel the load and hand the URL to the install sheet. Done
+        // before the rebuild so the cancelled nav never re-plans scripts.
+        if navigationAction.targetFrame?.isMainFrame == true,
+           let url = navigationAction.request.url,
+           url.path.lowercased().hasSuffix(".user.js") {
+            decisionHandler(.cancel)
+            pendingInstall = PendingInstall(url: url)
+            return
+        }
+
         // Only main-frame, real-URL navigations trigger a rebuild; subframes
         // and about:blank keep the current set. (Scripts are main-frame-only.)
         if navigationAction.targetFrame?.isMainFrame == true,
