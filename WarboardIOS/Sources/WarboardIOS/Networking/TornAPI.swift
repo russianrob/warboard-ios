@@ -109,6 +109,36 @@ enum TornAPI {
         }
     }
 
+    struct InventoryEntry: Identifiable, Equatable {
+        let id: Int
+        let name: String
+        let quantity: Int
+        let category: String
+    }
+
+    /// `/v2/user?selections=inventory` — the user's item inventory. v1's
+    /// inventory selection is deprecated (returns a string), so this uses v2
+    /// standalone. Powers the Quick Items picker.
+    static func fetchInventory(apiKey: String) async -> [InventoryEntry] {
+        guard !apiKey.isEmpty,
+              let url = URL(string: "\(base)/v2/user?selections=inventory&key=\(apiKey)")
+        else { return [] }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+            let inv = root["inventory"] as? [[String: Any]] ?? []
+            return inv.compactMap { o in
+                guard let id = (o["id"] as? Int) ?? (o["ID"] as? Int),
+                      let name = o["name"] as? String else { return nil }
+                let qty = (o["quantity"] as? Int) ?? (o["qty"] as? Int) ?? 0
+                let cat = (o["type"] as? String) ?? (o["category"] as? String) ?? ""
+                return InventoryEntry(id: id, name: name, quantity: qty, category: cat)
+            }
+        } catch {
+            return []
+        }
+    }
+
     /// `/user/?selections=attacks` (v1) — last-100 fights involving the
     /// user (attacks AND defends). Returned as the raw `attacks` map so
     /// the caller can POST it through to warboard untouched (the server

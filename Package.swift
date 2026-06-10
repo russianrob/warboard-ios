@@ -25,6 +25,7 @@ let package = Package(
                 "GMMessageHandler.swift",
                 "UserscriptController.swift",
                 "BrowserView.swift",
+                "QuickItemsBar.swift",
                 "ScriptsView.swift",
                 "InstallScriptView.swift"
             ]

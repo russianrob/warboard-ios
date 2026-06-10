@@ -10,14 +10,23 @@ import WarboardIOS
 /// which view is mounted), so this shell does not affect the watch.
 struct ContentView: View {
     @State private var showNotifications = false
+    @State private var showItemPicker = false
+    @StateObject private var quickItems = QuickItemsStore()
 
     var body: some View {
-        BrowserView(onShowNotifications: { showNotifications = true })
-            // App-wide shout banner — listens to RealtimeClient.globalToast
-            // so a broadcast surfaces over the browser.
-            .overlay(alignment: .top) { ShoutToastOverlay() }
-            .sheet(isPresented: $showNotifications) {
-                NavigationStack { NotificationSettingsView() }
-            }
+        BrowserView(
+            quickItems: quickItems.items,
+            onEditQuickItems: { showItemPicker = true },
+            onShowNotifications: { showNotifications = true }
+        )
+        // App-wide shout banner — listens to RealtimeClient.globalToast
+        // so a broadcast surfaces over the browser.
+        .overlay(alignment: .top) { ShoutToastOverlay() }
+        .sheet(isPresented: $showNotifications) {
+            NavigationStack { NotificationSettingsView() }
+        }
+        .sheet(isPresented: $showItemPicker) {
+            QuickItemsPickerView(store: quickItems)
+        }
     }
 }

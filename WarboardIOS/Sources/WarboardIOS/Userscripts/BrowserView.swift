@@ -189,11 +189,20 @@ public struct BrowserView: View {
     /// lives in the app target (it needs PrefsStore), which this framework
     /// can't import, so it comes in as a closure.
     private let onShowNotifications: (() -> Void)?
-    public init(onShowNotifications: (() -> Void)? = nil) {
+    /// The user's quick items (owned + persisted by the app target) and the
+    /// hook that opens the app's inventory picker to edit them.
+    private let quickItems: [QuickItem]
+    private let onEditQuickItems: (() -> Void)?
+    public init(quickItems: [QuickItem] = [],
+                onEditQuickItems: (() -> Void)? = nil,
+                onShowNotifications: (() -> Void)? = nil) {
+        self.quickItems = quickItems
+        self.onEditQuickItems = onEditQuickItems
         self.onShowNotifications = onShowNotifications
     }
     @StateObject private var model = BrowserModel()
     @State private var showScripts = false
+    @State private var toast: String?
 
     /// One controller per Browser tab. It reads the shared ScriptRegistry, so a
     /// script installed from the Scripts screen or the in-browser installer is
@@ -209,12 +218,31 @@ public struct BrowserView: View {
                 VStack(spacing: 0) {
                     urlBar
                     progressBar
+                    if !quickItems.isEmpty {
+                        QuickItemsBar(
+                            items: quickItems,
+                            factionMode: isFactionArmoury(model.displayURL),
+                            onUse: { useQuickItem($0) },
+                            onEdit: { onEditQuickItems?() }
+                        )
+                    }
                 }
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
             BrowserWebView(model: model, controller: controller)
         }
         .animation(.easeInOut(duration: 0.22), value: model.chromeVisible)
+        .overlay(alignment: .bottom) {
+            if let toast {
+                Text(toast)
+                    .font(.subheadline.weight(.medium))
+                    .padding(.horizontal, 16).padding(.vertical, 10)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .padding(.bottom, 28)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut, value: toast)
         .sheet(isPresented: $showScripts) {
             NavigationStack { ScriptsView() }
         }
@@ -263,6 +291,11 @@ public struct BrowserView: View {
                         Label("Notifications…", systemImage: "bell")
                     }
                 }
+                if let onEditQuickItems {
+                    Button { onEditQuickItems() } label: {
+                        Label("Quick Items…", systemImage: "bolt.fill")
+                    }
+                }
                 Button { controller.toggleDevTools() } label: {
                     Label(controller.devToolsEnabled ? "Dev Tools: On" : "Dev Tools",
                           systemImage: controller.devToolsEnabled ? "ladybug.fill" : "ladybug")
@@ -295,6 +328,62 @@ public struct BrowserView: View {
                 .frame(height: 2)
         } else {
             Color.clear.frame(height: 2)
+        }
+    }
+
+    /// True on the faction armoury (factions.php SPA, #/tab=armoury), where a
+    /// quick-item tap should use the FACTION's copy (fac=1).
+    private func isFactionArmoury(_ url: String) -> Bool {
+        let u = url.lowercased()
+        return u.contains("factions.php") && (u.contains("tab=armoury") || u.contains("tab=armory"))
+    }
+
+    /// Fire Torn's own item-use action inside the live, logged-in web session —
+    /// the same item.php?rfcv= call Torn's UI makes — reading the page's RFC
+    /// token + cookies. One tap = one use. On the armoury we add fac=1 so it
+    /// pulls from faction stock.
+    private func useQuickItem(_ item: QuickItem) {
+        guard let wv = model.webView else { return }
+        let fac = isFactionArmoury(model.displayURL)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        let js = """
+        const m = document.cookie.match(/(?:^|;\\s*)rfc_v=([^;]+)/);
+        const rfc = m ? m[1] : '';
+        const body = 'step=useItem&itemID=' + itemID + '&item=' + itemID + (fac ? '&fac=1' : '');
+        const resp = await fetch('item.php?rfcv=' + rfc, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
+          body: body,
+          credentials: 'include'
+        });
+        return await resp.text();
+        """
+        wv.callAsyncJavaScript(js, arguments: ["itemID": item.id, "fac": fac], in: nil, in: .page) { result in
+            Task { @MainActor in
+                switch result {
+                case .success(let value):
+                    showToast(useResultMessage(item: item, response: (value as? String) ?? ""))
+                case .failure:
+                    showToast("Couldn't use \(item.name)")
+                }
+            }
+        }
+    }
+
+    private func useResultMessage(item: QuickItem, response: String) -> String {
+        let r = response.lowercased()
+        if r.contains("\"success\":false") || r.contains("don't have") || r.contains("you don't")
+            || r.contains("no more") || r.contains("none left") || r.contains("cooldown") {
+            return "Couldn't use \(item.name)"
+        }
+        return "Used \(item.name) ✓"
+    }
+
+    private func showToast(_ message: String) {
+        toast = message
+        let shown = message
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+            if toast == shown { toast = nil }
         }
     }
 }
