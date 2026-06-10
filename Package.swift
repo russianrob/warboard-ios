@@ -25,7 +25,8 @@ let package = Package(
                 "GMMessageHandler.swift",
                 "UserscriptController.swift",
                 "BrowserView.swift",
-                "ScriptsView.swift"
+                "ScriptsView.swift",
+                "InstallScriptView.swift"
             ]
         ),
         .testTarget(
