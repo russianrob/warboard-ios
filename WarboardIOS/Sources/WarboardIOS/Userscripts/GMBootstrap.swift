@@ -39,29 +39,15 @@ enum GMBootstrap {
     }
 
     /// Resolve and read `gm-bootstrap.js` from whichever bundle holds it.
-    /// SwiftPM (Linux test build) emits `Bundle.module`; the xcodegen Mac app
-    /// build copies the file into the app bundle (`Bundle.main`). Fall back to
-    /// scanning loaded bundles so the headless test never misses it.
+    /// Decoded from the base64 constant embedded in GMBootstrapJS.swift —
+    /// no resource bundle needed, so this is identical under SwiftPM (Linux)
+    /// and the xcodegen framework (Mac).
     private static func loadBody() -> String {
-        let name = "gm-bootstrap"
-        let ext = "js"
-
-        var candidates: [Bundle] = []
-        #if SWIFT_PACKAGE
-        candidates.append(Bundle.module)
-        #endif
-        candidates.append(Bundle.main)
-        candidates.append(contentsOf: Bundle.allBundles)
-
-        var seen = Set<String>()
-        for bundle in candidates {
-            guard seen.insert(bundle.bundlePath).inserted else { continue }
-            if let url = bundle.url(forResource: name, withExtension: ext),
-               let text = try? String(contentsOf: url, encoding: .utf8) {
-                return text
-            }
+        guard let data = Data(base64Encoded: __gmBootstrapJSBase64),
+              let text = String(data: data, encoding: .utf8) else {
+            assertionFailure("gm-bootstrap base64 failed to decode")
+            return ""
         }
-        assertionFailure("gm-bootstrap.js missing from bundle")
-        return ""
+        return text
     }
 }

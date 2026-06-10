@@ -18,18 +18,14 @@ let package = Package(
             // plain SwiftPM on Linux. They are app-only and verified by
             // xcodebuild on a Mac. Keep this list in sync as the engine grows.
             exclude: [
+                // gm-bootstrap.js is now embedded as a base64 Swift constant
+                // (GMBootstrapJS.swift); SwiftPM ignores the source .js.
+                "Resources",
                 "GMBridge.swift",
                 "GMMessageHandler.swift",
                 "UserscriptController.swift",
                 "BrowserView.swift",
                 "ScriptsView.swift"
-            ],
-            // The GM bootstrap JS is an embedded resource (not a Swift source).
-            // `.process` copies it into Bundle.module so GMBootstrap.body can
-            // load it under `swift test` on Linux; the Mac app build bundles
-            // the same file via project.yml's resources build phase.
-            resources: [
-                .process("Resources/gm-bootstrap.js")
             ]
         ),
         .testTarget(
