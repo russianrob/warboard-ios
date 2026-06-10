@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import UIKit
 
 /// Observable navigation state for the in-app userscript browser.
 /// Holds the live WKWebView so the SwiftUI URL bar + toolbar can drive
@@ -14,6 +15,11 @@ final class BrowserModel: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var canGoBack: Bool = false
     @Published var canGoForward: Bool = false
+
+    /// Whether the URL bar is showing. Driven by scroll direction (Safari
+    /// style): hidden while scrolling down into the page, revealed on scroll
+    /// up, at the top, or when a new page starts loading.
+    @Published var chromeVisible: Bool = true
 
     /// Set once the representable builds the WebView.
     weak var webView: WKWebView?
@@ -49,6 +55,31 @@ final class BrowserModel: ObservableObject {
         } else {
             pendingLoad = url
         }
+    }
+
+    // Auto-hide bookkeeping (main-actor isolated, so the KVO handler just
+    // forwards the raw offset here).
+    private var lastOffsetY: CGFloat = 0
+    private var scrollAccum: CGFloat = 0
+    private let hideThreshold: CGFloat = 28
+
+    /// Fold a new scroll offset into the show/hide decision for the URL bar.
+    /// Same-direction travel accumulates; the bar only flips once it clears
+    /// the threshold, so a few stray pixels (or rubber-banding) don't toggle
+    /// it. Pinned at the top always shows.
+    func updateScroll(offsetY y: CGFloat) {
+        let dy = y - lastOffsetY
+        lastOffsetY = y
+        var desired: Bool?
+        if y <= 0 {
+            desired = true
+            scrollAccum = 0
+        } else {
+            if (dy > 0) == (scrollAccum >= 0) { scrollAccum += dy } else { scrollAccum = dy }
+            if scrollAccum > hideThreshold { desired = false; scrollAccum = 0 }
+            else if scrollAccum < -hideThreshold { desired = true; scrollAccum = 0 }
+        }
+        if let d = desired, chromeVisible != d { chromeVisible = d }
     }
 
     func goBack()    { webView?.goBack() }
@@ -110,13 +141,22 @@ private struct BrowserWebView: UIViewRepresentable {
                     Task { @MainActor in model?.progress = w.estimatedProgress }
                 },
                 wv.observe(\.isLoading, options: [.initial, .new]) { [weak model] w, _ in
-                    Task { @MainActor in model?.isLoading = w.isLoading }
+                    Task { @MainActor in
+                        model?.isLoading = w.isLoading
+                        // Always surface the bar when a new page starts so the
+                        // user can see/redirect where they're going.
+                        if w.isLoading { model?.chromeVisible = true }
+                    }
                 },
                 wv.observe(\.canGoBack, options: [.initial, .new]) { [weak model] w, _ in
                     Task { @MainActor in model?.canGoBack = w.canGoBack }
                 },
                 wv.observe(\.canGoForward, options: [.initial, .new]) { [weak model] w, _ in
                     Task { @MainActor in model?.canGoForward = w.canGoForward }
+                },
+                wv.scrollView.observe(\.contentOffset, options: [.new]) { [weak model] sv, _ in
+                    let y = sv.contentOffset.y
+                    Task { @MainActor in model?.updateScroll(offsetY: y) }
                 },
             ]
         }
@@ -133,6 +173,7 @@ private struct BrowserWebView: UIViewRepresentable {
 public struct BrowserView: View {
     public init() {}
     @StateObject private var model = BrowserModel()
+    @State private var showScripts = false
 
     /// One controller per Browser tab. It reads the shared ScriptRegistry, so a
     /// script installed from the Scripts screen or the in-browser installer is
@@ -144,12 +185,19 @@ public struct BrowserView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            urlBar
-            progressBar
+            if model.chromeVisible {
+                VStack(spacing: 0) {
+                    urlBar
+                    progressBar
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
             BrowserWebView(model: model, controller: controller)
         }
-        .navigationTitle("Browser")
-        .navigationBarTitleDisplayMode(.inline)
+        .animation(.easeInOut(duration: 0.22), value: model.chromeVisible)
+        .sheet(isPresented: $showScripts) {
+            NavigationStack { ScriptsView() }
+        }
         .sheet(item: $controller.pendingInstall) { item in
             InstallScriptView(url: item.url) { controller.pendingInstall = nil }
         }
@@ -198,6 +246,12 @@ public struct BrowserView: View {
                 }
             } label: {
                 Image(systemName: "ellipsis.circle")
+            }
+
+            // Manage installed userscripts (moved here from the old top bar so
+            // the web view gets that whole row back).
+            Button { showScripts = true } label: {
+                Image(systemName: "doc.text.fill")
             }
         }
         .padding(.horizontal, 10)
