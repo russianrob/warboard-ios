@@ -52,6 +52,29 @@ enum MatchMatcher {
         let range = NSRange(text.startIndex..<text.endIndex, in: text)
         return re.firstMatch(in: text, range: range) != nil
     }
+
+    static func matchesIncludePattern(pattern: String, url: String) -> Bool {
+        if pattern.count >= 2, pattern.hasPrefix("/"), pattern.hasSuffix("/") {
+            let body = String(pattern.dropFirst().dropLast())
+            guard let re = try? NSRegularExpression(pattern: body) else { return false }
+            let range = NSRange(url.startIndex..<url.endIndex, in: url)
+            return re.firstMatch(in: url, range: range) != nil
+        }
+        return wildcardMatches(glob: pattern, text: url)
+    }
+
+    static func matches(url: String, script: Userscript) -> Bool {
+        for ex in script.excludes where matchesIncludePattern(pattern: ex, url: url) {
+            return false
+        }
+        for m in script.matches where matchesMatchPattern(pattern: m, url: url) {
+            return true
+        }
+        for inc in script.includes where matchesIncludePattern(pattern: inc, url: url) {
+            return true
+        }
+        return false
+    }
 }
 
 struct URLParts {
