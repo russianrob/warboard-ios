@@ -12,7 +12,7 @@ final class ScriptsViewModel: ObservableObject {
     private let resolver: RequireResolver
     private let session: URLSession
 
-    init(registry: ScriptRegistry = ScriptRegistry(),
+    init(registry: ScriptRegistry = ScriptRegistry.shared,
          requireCache: RequireCache = RequireCache(root: RequireCache.defaultRoot()),
          session: URLSession = .shared) {
         self.registry = registry

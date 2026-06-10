@@ -3,6 +3,12 @@ import Foundation
 final class ScriptRegistry {
     enum RegistryError: Error { case notFound(String) }
 
+    /// Process-wide registry so the Scripts screen, the in-browser installer,
+    /// and the injector all share one in-memory list. Without this each held
+    /// its own copy loaded from disk at init, so an install was invisible to
+    /// the injector until the app relaunched.
+    static let shared = ScriptRegistry()
+
     private let fileURL: URL
     private var scripts: [Userscript]
 
@@ -33,6 +39,7 @@ final class ScriptRegistry {
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try enc.encode(scripts.sorted { $0.order < $1.order })
         try data.write(to: fileURL, options: .atomic)
+        NotificationCenter.default.post(name: .userscriptsDidChange, object: nil)
     }
 
     private func recompact() {
@@ -103,4 +110,10 @@ final class ScriptRegistry {
         recompact()
         try persist()
     }
+}
+
+extension Notification.Name {
+    /// Posted after any registry mutation persists, so the live in-app browser
+    /// can re-apply the current script set to the page without an app relaunch.
+    static let userscriptsDidChange = Notification.Name("warboard.userscriptsDidChange")
 }

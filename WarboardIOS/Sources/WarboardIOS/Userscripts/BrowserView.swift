@@ -134,10 +134,12 @@ public struct BrowserView: View {
     public init() {}
     @StateObject private var model = BrowserModel()
 
-    /// One controller instance per Browser tab, built from the default
-    /// registry/cache/bridge so installs from the Scripts tab take effect on
-    /// the next navigation. Observed directly so its published `menuCommands`
-    /// drive the URL-bar menu.
+    /// One controller per Browser tab. It reads the shared ScriptRegistry, so a
+    /// script installed from the Scripts screen or the in-browser installer is
+    /// picked up on the next page build; the `.userscriptsDidChange` observer
+    /// below reloads the current page so it applies without navigating or
+    /// relaunching. Observed directly so its published `menuCommands` drive the
+    /// URL-bar menu.
     @StateObject private var controller = UserscriptController()
 
     public var body: some View {
@@ -150,6 +152,15 @@ public struct BrowserView: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $controller.pendingInstall) { item in
             InstallScriptView(url: item.url) { controller.pendingInstall = nil }
+        }
+        // A newly installed/enabled/removed script changes the shared registry;
+        // reload the live page so the next page build re-applies the script set
+        // immediately, instead of only on the next manual navigation.
+        .onReceive(
+            NotificationCenter.default.publisher(for: .userscriptsDidChange)
+                .receive(on: RunLoop.main)
+        ) { _ in
+            model.reload()
         }
     }
 

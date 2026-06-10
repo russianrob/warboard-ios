@@ -44,7 +44,7 @@ final class InstallViewModel: ObservableObject {
     /// The installed script this one updates, if any.
     private var existing: Userscript?
 
-    init(registry: ScriptRegistry = ScriptRegistry(),
+    init(registry: ScriptRegistry = ScriptRegistry.shared,
          requireCache: RequireCache = RequireCache(root: RequireCache.defaultRoot()),
          session: URLSession = .shared) {
         self.registry = registry
