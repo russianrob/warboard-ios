@@ -140,7 +140,7 @@ public struct BrowserView: View {
     /// drive the URL-bar menu.
     @StateObject private var controller = UserscriptController()
 
-    var body: some View {
+    public var body: some View {
         VStack(spacing: 0) {
             urlBar
             progressBar

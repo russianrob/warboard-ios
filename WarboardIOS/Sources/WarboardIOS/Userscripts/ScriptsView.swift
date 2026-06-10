@@ -151,7 +151,7 @@ public struct ScriptsView: View {
     public init() {}
     @StateObject private var vm = ScriptsViewModel()
 
-    var body: some View {
+    public var body: some View {
         List {
             addSection
             if let msg = vm.errorMessage {
