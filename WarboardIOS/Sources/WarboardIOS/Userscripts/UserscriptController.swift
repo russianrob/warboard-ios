@@ -56,12 +56,18 @@ final class UserscriptController: NSObject, ObservableObject {
         config.websiteDataStore = .default()          // share Torn login cookie jar
         config.allowsInlineMediaPlayback = true
         config.defaultWebpagePreferences.allowsContentJavaScript = true
+        config.preferences.javaScriptCanOpenWindowsAutomatically = true
         self.configuration = config
         super.init()
 
         // GM message handlers are registered ONCE (they outlive navigations);
         // only user scripts are torn down/rebuilt per navigation.
         gmBridge.register(on: config.userContentController)
+
+        // Link-tap diagnostics: a capture-phase click probe reports every
+        // anchor tap to native, where WebDiag forwards it to the warboard
+        // log stream. Registered ONCE alongside the GM handlers.
+        WebDiagBridge.install(on: config.userContentController)
 
         // GM_registerMenuCommand → surface the command in the chrome menu.
         gmBridge.onRegisterMenuCommand = { [weak self] _, name, id in
@@ -132,8 +138,10 @@ final class UserscriptController: NSObject, ObservableObject {
         )
 
         // 5. Apply. removeAllUserScripts clears the PREVIOUS navigation's set;
-        //    GM message handlers (registered in init) are untouched.
+        //    GM message handlers (registered in init) are untouched. The
+        //    click-probe is a user script too, so re-add it after the wipe.
         userContent.removeAllUserScripts()
+        userContent.addUserScript(WebDiagBridge.probeUserScript())
         for p in planned {
             let ws = WKUserScript(
                 source: p.source,
@@ -153,6 +161,14 @@ extension UserscriptController: WKNavigationDelegate {
         decidePolicyFor navigationAction: WKNavigationAction,
         decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
     ) {
+        if let url = navigationAction.request.url {
+            WebDiag.log("nav", [
+                "url": url.absoluteString,
+                "type": navigationAction.navigationType.rawValue,
+                "mainFrame": navigationAction.targetFrame?.isMainFrame ?? false,
+            ])
+        }
+
         // A main-frame hit on a `.user.js` is an install request, not a page to
         // render: cancel the load and hand the URL to the install sheet. Done
         // before the rebuild so the cancelled nav never re-plans scripts.
@@ -173,6 +189,19 @@ extension UserscriptController: WKNavigationDelegate {
         }
         decisionHandler(.allow)
     }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        WebDiag.log("didFinish", ["url": webView.url?.absoluteString ?? "nil"])
+    }
+
+    func webView(_ webView: WKWebView,
+                 didFailProvisionalNavigation navigation: WKNavigation!,
+                 withError error: Error) {
+        WebDiag.log("didFail", [
+            "url": webView.url?.absoluteString ?? "nil",
+            "error": error.localizedDescription,
+        ])
+    }
 }
 
 extension UserscriptController {
@@ -190,6 +219,70 @@ extension UserscriptController {
     }
 }
 
+/// Receives the capture-phase click probe's messages from the page and
+/// forwards them to `WebDiag`. A standalone `NSObject` (not the
+/// `UserscriptController`) so the plain `WKScriptMessageHandler` retain
+/// chain stays separate from the reply-style GM bridge. Registered ONCE
+/// in `.page` alongside the GM handlers.
+final class WebDiagBridge: NSObject, WKScriptMessageHandler {
+    static let messageHandlerName = "wbdiag"
+
+    /// Capture-phase document click listener. Resolves the clicked element's
+    /// nearest `<a>` and posts its href/target/class to native; reports
+    /// `noAnchor` when the tap didn't land inside a link. mainFrameOnly:false
+    /// so taps in Torn's iframes (chat panel) are captured too.
+    private static let probeSource = """
+    (function () {
+      document.addEventListener('click', function (e) {
+        try {
+          var tag = (e.target && e.target.tagName) ? String(e.target.tagName) : '';
+          var a = e.target && e.target.closest ? e.target.closest('a') : null;
+          if (a) {
+            window.webkit.messageHandlers.wbdiag.postMessage({
+              href: a.href || '',
+              target: a.target || '',
+              cls: a.className ? String(a.className) : '',
+              prevented: false,
+              tag: tag
+            });
+          } else {
+            window.webkit.messageHandlers.wbdiag.postMessage({ noAnchor: true, tag: tag });
+          }
+        } catch (err) {}
+      }, true);
+    })();
+    """
+
+    /// The capture-phase click-probe user script. Re-added by
+    /// `UserscriptController.rebuildUserScripts` after every
+    /// `removeAllUserScripts()`, since that call also clears this probe.
+    static func probeUserScript() -> WKUserScript {
+        WKUserScript(
+            source: probeSource,
+            injectionTime: .atDocumentEnd,
+            forMainFrameOnly: false,
+            in: .page
+        )
+    }
+
+    /// Install the receiving message handler and the initial click probe.
+    /// The handler outlives per-navigation rebuilds; the probe is re-added
+    /// on each rebuild via `probeUserScript()`.
+    static func install(on userContentController: WKUserContentController) {
+        userContentController.removeScriptMessageHandler(
+            forName: messageHandlerName, contentWorld: .page)
+        let bridge = WebDiagBridge()
+        userContentController.add(bridge, contentWorld: .page, name: messageHandlerName)
+        userContentController.addUserScript(probeUserScript())
+    }
+
+    func userContentController(_ controller: WKUserContentController,
+                               didReceive message: WKScriptMessage) {
+        guard let body = message.body as? [String: Any] else { return }
+        WebDiag.log("click", body)
+    }
+}
+
 extension UserscriptController: WKUIDelegate {
     /// target=_blank / window.open links (Torn chat profile/item links) open
     /// no window by default in WKWebView — load them in the same view so they
@@ -198,6 +291,7 @@ extension UserscriptController: WKUIDelegate {
                  createWebViewWith configuration: WKWebViewConfiguration,
                  for navigationAction: WKNavigationAction,
                  windowFeatures: WKWindowFeatures) -> WKWebView? {
+        WebDiag.log("newwindow", ["url": navigationAction.request.url?.absoluteString ?? "nil"])
         if navigationAction.request.url != nil {
             webView.load(navigationAction.request)
         }
