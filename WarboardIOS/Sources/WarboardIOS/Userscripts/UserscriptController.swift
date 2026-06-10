@@ -59,7 +59,7 @@ final class UserscriptController: NSObject, ObservableObject {
 
     /// Convenience for SwiftUI hosts: build a controller from the default,
     /// process-wide registry/cache/bridge dependencies.
-    convenience init() {
+    override convenience init() {
         self.init(registry: ScriptRegistry(),
                   requireCache: RequireCache(root: RequireCache.defaultRoot()),
                   gmBridge: GMBridge())
