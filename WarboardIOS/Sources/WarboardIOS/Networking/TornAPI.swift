@@ -126,14 +126,21 @@ enum TornAPI {
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
             let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
-            let inv = root["inventory"] as? [[String: Any]] ?? []
-            return inv.compactMap { o in
-                guard let id = (o["id"] as? Int) ?? (o["ID"] as? Int),
-                      let name = o["name"] as? String else { return nil }
-                let qty = (o["quantity"] as? Int) ?? (o["qty"] as? Int) ?? 0
-                let cat = (o["type"] as? String) ?? (o["category"] as? String) ?? ""
-                return InventoryEntry(id: id, name: name, quantity: qty, category: cat)
+            // v2 shape: inventory is an OBJECT { items: [{id, amount, name,
+            // faction_owned, ...}], timestamp }, NOT an array; quantity is `amount`.
+            let inv = root["inventory"] as? [String: Any] ?? [:]
+            let items = inv["items"] as? [[String: Any]] ?? []
+            let parsed: [InventoryEntry] = items.compactMap { o in
+                guard let name = o["name"] as? String else { return nil }
+                let id = (o["id"] as? Int) ?? Int((o["id"] as? String) ?? "") ?? 0
+                guard id > 0 else { return nil }
+                let qty = (o["amount"] as? Int) ?? (o["quantity"] as? Int) ?? 0
+                return InventoryEntry(id: id, name: name, quantity: qty, category: "")
             }
+            // Dedupe by item id (weapons appear once per uid) so the picker
+            // shows one pill per item type.
+            var seen = Set<Int>()
+            return parsed.filter { seen.insert($0.id).inserted }
         } catch {
             return []
         }
