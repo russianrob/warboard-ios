@@ -142,6 +142,7 @@ final class UserscriptController: NSObject, ObservableObject {
         //    click-probe is a user script too, so re-add it after the wipe.
         userContent.removeAllUserScripts()
         userContent.addUserScript(WebDiagBridge.probeUserScript())
+        userContent.addUserScript(Self.linkFixerUserScript())
         for p in planned {
             let ws = WKUserScript(
                 source: p.source,
@@ -151,6 +152,29 @@ final class UserscriptController: NSObject, ObservableObject {
             )
             userContent.addUserScript(ws)
         }
+    }
+
+    /// Torn intercepts `target="_blank"` link clicks before WebKit can open a
+    /// new window, so those links do nothing in a single-web-view browser.
+    /// This capture-phase listener opens them in-place instead. Re-injected
+    /// every navigation (it's cleared by removeAllUserScripts above).
+    private static func linkFixerUserScript() -> WKUserScript {
+        let src = """
+        (function () {
+          if (window.__wbLinkFixer) return;
+          window.__wbLinkFixer = true;
+          document.addEventListener('click', function (e) {
+            var t = e.target;
+            var a = (t && t.closest) ? t.closest('a[target="_blank"]') : null;
+            if (a && a.href && /^https?:/i.test(a.href)) {
+              e.preventDefault();
+              window.location.assign(a.href);
+            }
+          }, true);
+        })();
+        """
+        return WKUserScript(source: src, injectionTime: .atDocumentStart,
+                            forMainFrameOnly: false, in: .page)
     }
 }
 
