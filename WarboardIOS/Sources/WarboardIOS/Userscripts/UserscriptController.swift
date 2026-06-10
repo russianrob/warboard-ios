@@ -31,6 +31,15 @@ final class UserscriptController: NSObject, ObservableObject {
     /// cancelled and BrowserView shows the install sheet instead.
     @Published var pendingInstall: PendingInstall?
 
+    /// On-device DevTools (eruda) toggle. When on, the eruda console/network/
+    /// elements overlay is injected into the page (and re-injected on each
+    /// full navigation). Published so the menu shows its state.
+    @Published private(set) var devToolsEnabled = false
+
+    /// Eruda's bundle source, fetched once natively (so Torn's CSP doesn't
+    /// block it) and reused for every (re)injection.
+    private var erudaSource: String?
+
     private let registry: ScriptRegistry
     private let requireCache: RequireCache
     private let gmBridge: GMBridge
@@ -216,6 +225,10 @@ extension UserscriptController: WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         WebDiag.log("didFinish", ["url": webView.url?.absoluteString ?? "nil"])
+        // Eruda lives in the page's window, so a full load wipes it — re-inject
+        // when DevTools is on. (SPA hash navs keep the same window, so they
+        // don't need this.)
+        injectErudaIfEnabled()
     }
 
     func webView(_ webView: WKWebView,
@@ -304,6 +317,56 @@ final class WebDiagBridge: NSObject, WKScriptMessageHandler {
                                didReceive message: WKScriptMessage) {
         guard let body = message.body as? [String: Any] else { return }
         WebDiag.log("click", body)
+    }
+}
+
+extension UserscriptController {
+    /// Pinned to eruda 3.x. jsDelivr resolves the latest 3.x patch; URLSession
+    /// follows the redirect.
+    private static let erudaURL = "https://cdn.jsdelivr.net/npm/eruda@3"
+
+    /// Init (or re-show) eruda after its source has been evaluated into the page.
+    private static let erudaInitJS = """
+    ;(function(){try{if(window.eruda){if(!window.__wbEruda){eruda.init();window.__wbEruda=true;}else{eruda.show();}}}catch(e){}})();
+    """
+
+    func toggleDevTools() { setDevTools(!devToolsEnabled) }
+
+    func setDevTools(_ on: Bool) {
+        devToolsEnabled = on
+        guard let wv = webView else { return }
+        if on {
+            Task { @MainActor in
+                guard let src = await loadErudaSource(), let wv = self.webView else { return }
+                wv.evaluateJavaScript(src + Self.erudaInitJS, completionHandler: nil)
+            }
+        } else {
+            wv.evaluateJavaScript("try{if(window.eruda&&eruda.hide)eruda.hide();}catch(e){}", completionHandler: nil)
+        }
+    }
+
+    private func injectErudaIfEnabled() {
+        guard devToolsEnabled else { return }
+        Task { @MainActor in
+            guard let src = await loadErudaSource(), let wv = self.webView else { return }
+            wv.evaluateJavaScript(src + Self.erudaInitJS, completionHandler: nil)
+        }
+    }
+
+    /// Fetch the eruda bundle once and cache it. Native fetch, so Torn's CSP
+    /// (which would block a page-loaded <script src>) doesn't apply; the source
+    /// is then evaluated into the page directly.
+    private func loadErudaSource() async -> String? {
+        if let s = erudaSource { return s }
+        guard let url = URL(string: Self.erudaURL) else { return nil }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let s = String(data: data, encoding: .utf8)
+            erudaSource = s
+            return s
+        } catch {
+            return nil
+        }
     }
 }
 

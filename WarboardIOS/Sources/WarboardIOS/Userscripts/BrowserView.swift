@@ -262,8 +262,12 @@ public struct BrowserView: View {
                     Button { onShowNotifications() } label: {
                         Label("Notifications…", systemImage: "bell")
                     }
-                    Divider()
                 }
+                Button { controller.toggleDevTools() } label: {
+                    Label(controller.devToolsEnabled ? "Dev Tools: On" : "Dev Tools",
+                          systemImage: controller.devToolsEnabled ? "ladybug.fill" : "ladybug")
+                }
+                Divider()
                 if controller.menuCommands.isEmpty {
                     Text("No script actions").foregroundStyle(.secondary)
                 }
