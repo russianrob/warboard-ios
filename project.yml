@@ -213,6 +213,13 @@ targets:
     platform: iOS
     sources:
       - path: WarboardIOS/Sources/WarboardIOS/Userscripts
+        excludes:
+          - "Resources/**"
+      # gm-bootstrap.js must land in the framework's Copy Resources phase
+      # (xcodegen would otherwise mis-file the .js); GMBootstrap loads it
+      # from the framework bundle via Bundle.allBundles on Mac.
+      - path: WarboardIOS/Sources/WarboardIOS/Userscripts/Resources
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tornwar.warboard.engine
