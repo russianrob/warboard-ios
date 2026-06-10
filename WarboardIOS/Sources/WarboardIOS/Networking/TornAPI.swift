@@ -120,11 +120,17 @@ enum TornAPI {
     /// inventory selection is deprecated (returns a string), so this uses v2
     /// standalone. Powers the Quick Items picker.
     static func fetchInventory(apiKey: String) async -> [InventoryEntry] {
+        // v2 only exposes inventory as a SUB-RESOURCE path (it's not a valid
+        // `?selections=` value — that returns "Incorrect category"), and v2 auth
+        // is the `Authorization: ApiKey <key>` header.
         guard !apiKey.isEmpty,
-              let url = URL(string: "\(base)/v2/user?selections=inventory&key=\(apiKey)")
+              let url = URL(string: "\(base)/v2/user/inventory")
         else { return [] }
+        var req = URLRequest(url: url)
+        req.setValue("ApiKey \(apiKey)", forHTTPHeaderField: "Authorization")
+        req.timeoutInterval = 15
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await URLSession.shared.data(for: req)
             let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
             // v2 shape: inventory is an OBJECT { items: [{id, amount, name,
             // faction_owned, ...}], timestamp }, NOT an array; quantity is `amount`.
