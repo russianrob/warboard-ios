@@ -119,19 +119,25 @@ enum TornAPI {
     /// `/v2/user?selections=inventory` — the user's item inventory. v1's
     /// inventory selection is deprecated (returns a string), so this uses v2
     /// standalone. Powers the Quick Items picker.
-    static func fetchInventory(apiKey: String) async -> [InventoryEntry] {
+    /// Returns the parsed inventory and, on failure, a human-readable reason so
+    /// the picker can show WHY it's empty (key access level, network, etc.).
+    static func fetchInventory(apiKey: String) async -> (items: [InventoryEntry], error: String?) {
         // v2 only exposes inventory as a SUB-RESOURCE path (it's not a valid
         // `?selections=` value — that returns "Incorrect category"), and v2 auth
         // is the `Authorization: ApiKey <key>` header.
-        guard !apiKey.isEmpty,
-              let url = URL(string: "\(base)/v2/user/inventory")
-        else { return [] }
+        guard !apiKey.isEmpty else { return ([], "No API key set") }
+        guard let url = URL(string: "\(base)/v2/user/inventory") else { return ([], "Bad URL") }
         var req = URLRequest(url: url)
         req.setValue("ApiKey \(apiKey)", forHTTPHeaderField: "Authorization")
         req.timeoutInterval = 15
         do {
-            let (data, _) = try await URLSession.shared.data(for: req)
+            let (data, resp) = try await URLSession.shared.data(for: req)
             let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+            if let err = root["error"] as? [String: Any] {
+                let msg = (err["error"] as? String) ?? "Torn API error"
+                let code = (err["code"] as? Int).map { " (code \($0))" } ?? ""
+                return ([], "Torn API: \(msg)\(code)")
+            }
             // v2 shape: inventory is an OBJECT { items: [{id, amount, name,
             // faction_owned, ...}], timestamp }, NOT an array; quantity is `amount`.
             let inv = root["inventory"] as? [String: Any] ?? [:]
@@ -143,12 +149,17 @@ enum TornAPI {
                 let qty = (o["amount"] as? Int) ?? (o["quantity"] as? Int) ?? 0
                 return InventoryEntry(id: id, name: name, quantity: qty, category: "")
             }
+            if parsed.isEmpty {
+                let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+                let snippet = String(data: data.prefix(160), encoding: .utf8) ?? ""
+                return ([], "Empty (HTTP \(status)): \(snippet)")
+            }
             // Dedupe by item id (weapons appear once per uid) so the picker
             // shows one pill per item type.
             var seen = Set<Int>()
-            return parsed.filter { seen.insert($0.id).inserted }
+            return (parsed.filter { seen.insert($0.id).inserted }, nil)
         } catch {
-            return []
+            return ([], "Network: \(error.localizedDescription)")
         }
     }
 

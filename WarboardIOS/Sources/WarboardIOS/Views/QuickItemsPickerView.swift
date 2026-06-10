@@ -11,6 +11,7 @@ struct QuickItemsPickerView: View {
 
     @State private var inventory: [TornAPI.InventoryEntry] = []
     @State private var loading = true
+    @State private var loadError: String?
     @State private var search = ""
 
     private var filtered: [TornAPI.InventoryEntry] {
@@ -30,9 +31,12 @@ struct QuickItemsPickerView: View {
                             .font(.system(size: 44)).foregroundStyle(.secondary)
                         Text("Couldn't load your inventory")
                             .font(.headline)
-                        Text("Check your API key in the Notifications screen, then try again.")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center).padding(.horizontal, 32)
+                        Text(loadError ?? "Check your API key in the Notifications screen, then try again.")
+                            .font(.caption).foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center).padding(.horizontal, 24)
+                            .textSelection(.enabled)
+                        Button("Retry") { Task { await load() } }
+                            .buttonStyle(.bordered).padding(.top, 4)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -63,11 +67,16 @@ struct QuickItemsPickerView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
-            .task {
-                inventory = await TornAPI.fetchInventory(apiKey: prefs.apiKey)
-                    .sorted { $0.name < $1.name }
-                loading = false
-            }
+            .task { await load() }
         }
+    }
+
+    private func load() async {
+        loading = true
+        loadError = nil
+        let result = await TornAPI.fetchInventory(apiKey: prefs.apiKey)
+        inventory = result.items.sorted { $0.name < $1.name }
+        loadError = result.error
+        loading = false
     }
 }

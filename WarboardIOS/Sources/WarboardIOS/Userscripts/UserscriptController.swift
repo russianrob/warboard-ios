@@ -325,10 +325,28 @@ extension UserscriptController {
     /// follows the redirect.
     private static let erudaURL = "https://cdn.jsdelivr.net/npm/eruda@3"
 
-    /// Init (or re-show) eruda after its source has been evaluated into the page.
-    private static let erudaInitJS = """
-    ;(function(){try{if(window.eruda){if(!window.__wbEruda){eruda.init();window.__wbEruda=true;}else{eruda.show();}}}catch(e){}})();
-    """
+    /// Wrap eruda's UMD bundle so it attaches to `window.eruda`. Torn's page has
+    /// a module loader (AMD `define.amd` / CommonJS `module`), and eruda's UMD
+    /// would bind to THAT instead of the global — leaving `window.eruda`
+    /// undefined and the console invisible. We hide define/module/exports across
+    /// the eval, then init.
+    private static func erudaInjection(_ source: String) -> String {
+        return """
+        (function(){
+          var _d = window.define, _m = window.module, _e = window.exports;
+          try { window.define = undefined; window.module = undefined; window.exports = undefined; } catch (e) {}
+          try {
+        \(source)
+          } catch (e) {}
+          try { window.define = _d; window.module = _m; window.exports = _e; } catch (e) {}
+          try {
+            if (window.eruda) {
+              if (!window.__wbEruda) { eruda.init(); window.__wbEruda = true; } else { eruda.show(); }
+            }
+          } catch (e) {}
+        })();
+        """
+    }
 
     func toggleDevTools() { setDevTools(!devToolsEnabled) }
 
@@ -338,7 +356,7 @@ extension UserscriptController {
         if on {
             Task { @MainActor in
                 guard let src = await loadErudaSource(), let wv = self.webView else { return }
-                wv.evaluateJavaScript(src + Self.erudaInitJS, completionHandler: nil)
+                wv.evaluateJavaScript(Self.erudaInjection(src), completionHandler: nil)
             }
         } else {
             wv.evaluateJavaScript("try{if(window.eruda&&eruda.hide)eruda.hide();}catch(e){}", completionHandler: nil)
@@ -349,7 +367,7 @@ extension UserscriptController {
         guard devToolsEnabled else { return }
         Task { @MainActor in
             guard let src = await loadErudaSource(), let wv = self.webView else { return }
-            wv.evaluateJavaScript(src + Self.erudaInitJS, completionHandler: nil)
+            wv.evaluateJavaScript(Self.erudaInjection(src), completionHandler: nil)
         }
     }
 
