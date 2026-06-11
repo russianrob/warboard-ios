@@ -184,6 +184,72 @@ enum TornAPI {
         } catch { return [:] }
     }
 
+    /// One incoming attack on the faction, for the War Room's Retaliation tab.
+    struct FactionAttack: Identifiable {
+        let id: String          // attack id/code — also the List row id
+        let attackerId: Int
+        let attackerName: String
+        let attackerLevel: Int
+        let attackerFactionId: Int
+        let defenderName: String
+        let result: String
+        let endedTs: Int        // unix seconds; drives the 5-min retal window
+    }
+
+    /// `/v2/faction/attacks` — the faction's recent attack feed (needs faction-AA
+    /// key access). Returns the latest page (newest first); the Retaliation tab
+    /// filters it to enemy-faction attacks on our members.
+    static func fetchFactionAttacks(apiKey: String, limit: Int = 100) async -> (attacks: [FactionAttack], error: String?) {
+        guard !apiKey.isEmpty else { return ([], "No API key set") }
+        guard let url = URL(string: "\(base)/v2/faction/attacks?key=\(apiKey)&limit=\(limit)&sort=DESC") else { return ([], "Bad URL") }
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 20
+        do {
+            let (data, _) = try await URLSession.shared.data(for: req)
+            let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+            if let err = root["error"] as? [String: Any] {
+                let msg = (err["error"] as? String) ?? "Torn API error"
+                let code = (err["code"] as? Int).map { " (code \($0))" } ?? ""
+                return ([], "Torn API: \(msg)\(code)")
+            }
+            // v2 returns { "attacks": [ {...} ] } (occasionally an object map).
+            let rawList: [[String: Any]]
+            if let arr = root["attacks"] as? [[String: Any]] {
+                rawList = arr
+            } else if let dict = root["attacks"] as? [String: Any] {
+                rawList = dict.values.compactMap { $0 as? [String: Any] }
+            } else {
+                rawList = []
+            }
+            let parsed: [FactionAttack] = rawList.compactMap { a in
+                // Stealthed attacks have no attacker object — can't retaliate.
+                guard let attacker = a["attacker"] as? [String: Any] else { return nil }
+                let aid = (attacker["id"] as? Int) ?? Int((attacker["id"] as? String) ?? "") ?? 0
+                guard aid > 0 else { return nil }
+                let aFac = ((attacker["faction"] as? [String: Any])?["id"] as? Int)
+                    ?? (a["attacker_faction"] as? Int) ?? 0
+                let defender = a["defender"] as? [String: Any]
+                let ended = (a["ended"] as? Int) ?? (a["started"] as? Int) ?? 0
+                let rowId = (a["id"] as? Int).map(String.init)
+                    ?? (a["code"] as? String)
+                    ?? "\(aid)-\(ended)"
+                return FactionAttack(
+                    id: rowId,
+                    attackerId: aid,
+                    attackerName: (attacker["name"] as? String) ?? "ID \(aid)",
+                    attackerLevel: (attacker["level"] as? Int) ?? 0,
+                    attackerFactionId: aFac,
+                    defenderName: (defender?["name"] as? String) ?? "?",
+                    result: (a["result"] as? String) ?? "",
+                    endedTs: ended
+                )
+            }
+            return (parsed, nil)
+        } catch {
+            return ([], "Network: \(error.localizedDescription)")
+        }
+    }
+
     private static func parseDashboard(_ root: [String: Any]) -> DashboardSnapshot {
         // v1 puts each bar at root level — energy / nerve / happy / life
         // are top-level keys, NOT under a "bars" wrapper. Earlier code

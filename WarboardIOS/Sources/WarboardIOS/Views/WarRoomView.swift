@@ -2,14 +2,14 @@ import SwiftUI
 import UIKit
 
 enum WarSubTab: String, CaseIterable, Identifiable {
-    case targets, chat, report, heatmap
+    case targets, retaliation, report, heatmap
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .targets: return "Targets"
-        case .chat:    return "Chat"
-        case .report:  return "Report"
-        case .heatmap: return "Heatmap"
+        case .targets:     return "Targets"
+        case .retaliation: return "Retal"
+        case .report:      return "Report"
+        case .heatmap:     return "Heatmap"
         }
     }
 }
@@ -53,8 +53,8 @@ struct WarRoomView: View {
                                 showPostWar = true
                                 if vm.postWarReport == nil { vm.loadPostWarReport() }
                             })
-                case .chat:
-                    TornChatWebView()
+                case .retaliation:
+                    RetaliationTab(war: war, nowMs: nowMs)
                 case .report:
                     ReportTab(report: vm.scoutReport, loading: vm.scoutLoading,
                               onLoad: { vm.loadScoutReport() })
@@ -138,6 +138,98 @@ struct WarRoomView: View {
                 vm.loadScoutReport()
             }
         }
+    }
+}
+
+/// Recent enemy attacks on our faction members, newest first, with the 5-minute
+/// retaliation-bonus window counting down and a one-tap attack-back button.
+private struct RetaliationTab: View {
+    @EnvironmentObject private var prefs: PrefsStore
+    let war: WarSnapshot
+    let nowMs: Int64
+
+    @State private var attacks: [TornAPI.FactionAttack] = []
+    @State private var loading = true
+    @State private var error: String?
+    @State private var sheet: SafariSheet?
+
+    /// Torn's retaliation bonus lasts 5 minutes after the attack ends.
+    private static let retalWindow = 5 * 60
+
+    private var incoming: [TornAPI.FactionAttack] {
+        let enemy = Int(war.enemyFactionId) ?? -1
+        let cutoff = Int(nowMs / 1000) - 3 * 60 * 60 // last 3h
+        return attacks
+            .filter { $0.attackerFactionId == enemy && $0.endedTs >= cutoff }
+            .sorted { $0.endedTs > $1.endedTs }
+    }
+
+    var body: some View {
+        Group {
+            if loading {
+                ProgressView().controlSize(.large).frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let error {
+                MessageView(icon: "exclamationmark.triangle", text: error)
+            } else if incoming.isEmpty {
+                MessageView(icon: "checkmark.shield", text: "No recent incoming attacks.")
+            } else {
+                List(incoming) { row($0) }
+                    .listStyle(.plain)
+            }
+        }
+        .task { await load() }
+        .refreshable { await load() }
+        .sheet(item: $sheet) { $0 }
+    }
+
+    @ViewBuilder private func row(_ a: TornAPI.FactionAttack) -> some View {
+        let nowSec = Int(nowMs / 1000)
+        let ago = max(0, nowSec - a.endedTs)
+        let remaining = a.endedTs + Self.retalWindow - nowSec
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(a.attackerName) [\(a.attackerLevel)]")
+                    .font(.subheadline.weight(.semibold))
+                Text("→ \(a.defenderName)\(a.result.isEmpty ? "" : " · \(a.result)")")
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(remaining > 0
+                     ? "\(agoText(ago)) · ⏳ \(mmss(remaining)) retal"
+                     : "\(agoText(ago)) · window gone")
+                    .font(.caption2)
+                    .foregroundStyle(remaining > 0 ? Color.orange : Color.secondary)
+            }
+            Spacer()
+            Button("Attack") {
+                openLink("https://www.torn.com/loader.php?sid=attack&user2ID=\(a.attackerId)")
+            }
+            .buttonStyle(.borderedProminent).controlSize(.small).tint(.red)
+        }
+        .padding(.vertical, 2)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            openLink("https://www.torn.com/profiles.php?XID=\(a.attackerId)")
+        }
+    }
+
+    private func load() async {
+        loading = true
+        error = nil
+        let r = await TornAPI.fetchFactionAttacks(apiKey: prefs.apiKey)
+        attacks = r.attacks
+        error = r.error
+        loading = false
+    }
+
+    private func openLink(_ s: String) {
+        guard let url = URL(string: s) else { return }
+        if prefs.linkOpenInApp { sheet = url.asSafariSheet } else { UIApplication.shared.open(url) }
+    }
+
+    private func agoText(_ sec: Int) -> String {
+        sec < 60 ? "\(sec)s ago" : "\(sec / 60)m ago"
+    }
+    private func mmss(_ sec: Int) -> String {
+        String(format: "%d:%02d", sec / 60, sec % 60)
     }
 }
 
