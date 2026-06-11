@@ -349,10 +349,22 @@ public struct BrowserView: View {
         let js = """
         const m = document.cookie.match(/(?:^|;\\s*)rfc_v=([^;]+)/);
         const rfc = m ? m[1] : '';
+        const url = 'item.php?rfcv=' + rfc;
+        // Prefer Torn's own jQuery so the request matches the exact one the site
+        // (and TornPDA) make; fall back to fetch only if jQuery isn't present.
+        if (typeof $ !== 'undefined' && $.ajax) {
+          const data = { step: 'useItem', itemID: itemID, item: itemID };
+          if (fac) data.fac = 1;
+          return await new Promise(function (resolve) {
+            $.ajax({ url: url, type: 'POST', data: data,
+              success: function (resp) { resolve(typeof resp === 'string' ? resp : JSON.stringify(resp)); },
+              error: function (xhr) { resolve(xhr && xhr.responseText ? xhr.responseText : ''); } });
+          });
+        }
         const body = 'step=useItem&itemID=' + itemID + '&item=' + itemID + (fac ? '&fac=1' : '');
-        const resp = await fetch('item.php?rfcv=' + rfc, {
+        const resp = await fetch(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest', 'Accept': '*/*' },
           body: body,
           credentials: 'include'
         });
@@ -371,12 +383,24 @@ public struct BrowserView: View {
     }
 
     private func useResultMessage(item: QuickItem, response: String) -> String {
-        let r = response.lowercased()
-        if r.contains("\"success\":false") || r.contains("don't have") || r.contains("you don't")
-            || r.contains("no more") || r.contains("none left") || r.contains("cooldown") {
-            return "Couldn't use \(item.name)"
+        // Torn's useItem returns JSON like {"success":bool,"text":"You used a ..."}.
+        // Show Torn's own message (the real reason on failure, the result on
+        // success) instead of guessing from substrings.
+        if let data = response.data(using: .utf8),
+           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            let success = obj["success"] as? Bool
+            let raw = (obj["text"] as? String) ?? (obj["message"] as? String) ?? ""
+            let text = raw
+                .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+                .replacingOccurrences(of: "&nbsp;", with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if success == false {
+                return text.isEmpty ? "Couldn't use \(item.name)" : text
+            }
+            return text.isEmpty ? "Used \(item.name) ✓" : text
         }
-        return "Used \(item.name) ✓"
+        // Non-JSON (likely the full HTML page) -> the AJAX use didn't go through.
+        return "Couldn't use \(item.name) — open the Items page once, then retry"
     }
 
     private func showToast(_ message: String) {

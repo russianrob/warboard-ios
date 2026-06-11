@@ -140,11 +140,20 @@ enum TornAPI {
             }
             // v2 catalog shape: { "items": [ {id, name, type, sub_type, ...} ] }.
             let rawItems = root["items"] as? [[String: Any]] ?? []
+            // Quick Items is a one-tap "use item" list, so keep only the
+            // consumable/usable types and drop weapons (Melee/Primary/Secondary/
+            // Temporary), armour (Defensive), collectibles (Collectible/Artifact/
+            // Plushie/Flower/Jewelry), cars, clothing, tools, etc.
+            let usableTypes: Set<String> = [
+                "medical", "drug", "booster", "energy drink",
+                "alcohol", "candy", "enhancer", "supply pack",
+            ]
             let parsed: [InventoryEntry] = rawItems.compactMap { o in
                 guard let name = o["name"] as? String, !name.isEmpty else { return nil }
                 let id = (o["id"] as? Int) ?? Int((o["id"] as? String) ?? "") ?? 0
                 guard id > 0 else { return nil }
                 let type = (o["type"] as? String) ?? ""
+                guard usableTypes.contains(type.lowercased()) else { return nil }
                 return InventoryEntry(id: id, name: name, quantity: 0, category: type)
             }
             if parsed.isEmpty {
