@@ -1,9 +1,10 @@
 import SwiftUI
 import WarboardIOS
 
-/// Sheet that lists the user's Torn inventory (fetched with their API key) and
-/// lets them tick items on/off the Quick Items bar. Tapping a row toggles it
-/// in the store immediately, so this doubles as add + remove.
+/// Sheet that lists Torn's item catalog (fetched with their API key) and lets
+/// them tick items on/off the Quick Items bar. Tapping a row toggles it in the
+/// store immediately, so this doubles as add + remove. (Torn removed the
+/// personal-inventory API, so — like TornPDA — items come from the catalog.)
 struct QuickItemsPickerView: View {
     @ObservedObject var store: QuickItemsStore
     @EnvironmentObject private var prefs: PrefsStore
@@ -23,13 +24,13 @@ struct QuickItemsPickerView: View {
         NavigationStack {
             Group {
                 if loading {
-                    ProgressView("Loading your inventory…")
+                    ProgressView("Loading items…")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if inventory.isEmpty {
                     VStack(spacing: 10) {
                         Image(systemName: "shippingbox")
                             .font(.system(size: 44)).foregroundStyle(.secondary)
-                        Text("Couldn't load your inventory")
+                        Text("Couldn't load items")
                             .font(.headline)
                         Text(loadError ?? "Check your API key in the Notifications screen, then try again.")
                             .font(.caption).foregroundStyle(.secondary)
@@ -51,7 +52,9 @@ struct QuickItemsPickerView: View {
                                 .frame(width: 26, height: 26)
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(item.name).foregroundStyle(.primary)
-                                    Text("×\(item.quantity)").font(.caption).foregroundStyle(.secondary)
+                                    if !item.category.isEmpty {
+                                        Text(item.category).font(.caption).foregroundStyle(.secondary)
+                                    }
                                 }
                                 Spacer()
                                 Image(systemName: store.contains(item.id) ? "checkmark.circle.fill" : "circle")
@@ -74,8 +77,8 @@ struct QuickItemsPickerView: View {
     private func load() async {
         loading = true
         loadError = nil
-        let result = await TornAPI.fetchInventory(apiKey: prefs.apiKey)
-        inventory = result.items.sorted { $0.name < $1.name }
+        let result = await TornAPI.fetchItemCatalog(apiKey: prefs.apiKey)
+        inventory = result.items
         loadError = result.error
         loading = false
     }

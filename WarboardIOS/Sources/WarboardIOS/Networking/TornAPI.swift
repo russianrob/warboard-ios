@@ -116,20 +116,20 @@ enum TornAPI {
         let category: String
     }
 
-    /// `/v2/user?selections=inventory` — the user's item inventory. v1's
-    /// inventory selection is deprecated (returns a string), so this uses v2
-    /// standalone. Powers the Quick Items picker.
-    /// Returns the parsed inventory and, on failure, a human-readable reason so
-    /// the picker can show WHY it's empty (key access level, network, etc.).
-    static func fetchInventory(apiKey: String) async -> (items: [InventoryEntry], error: String?) {
-        // v2 only exposes inventory as a SUB-RESOURCE path (it's not a valid
-        // `?selections=` value — that returns "Incorrect category"), and v2 auth
-        // is the `Authorization: ApiKey <key>` header.
+    /// `/v2/torn?selections=items` — Torn's master item catalog.
+    ///
+    /// Torn REMOVED the personal-inventory API (every inventory form — v1
+    /// `?selections=inventory`, v2 `?selections=inventory`, and the
+    /// `/v2/user/inventory` sub-resource — now returns "Incorrect category"
+    /// / code 21). So Quick Items is populated from the catalog instead, exactly
+    /// like TornPDA does (its own code: "Personal inventory was removed from the
+    /// API"). Returns all catalog items (id, name, type); the picker is
+    /// searchable so the ~1500-item list stays manageable.
+    static func fetchItemCatalog(apiKey: String) async -> (items: [InventoryEntry], error: String?) {
         guard !apiKey.isEmpty else { return ([], "No API key set") }
-        guard let url = URL(string: "\(base)/v2/user/inventory") else { return ([], "Bad URL") }
+        guard let url = URL(string: "\(base)/v2/torn?selections=items&key=\(apiKey)") else { return ([], "Bad URL") }
         var req = URLRequest(url: url)
-        req.setValue("ApiKey \(apiKey)", forHTTPHeaderField: "Authorization")
-        req.timeoutInterval = 15
+        req.timeoutInterval = 25
         do {
             let (data, resp) = try await URLSession.shared.data(for: req)
             let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
@@ -138,26 +138,22 @@ enum TornAPI {
                 let code = (err["code"] as? Int).map { " (code \($0))" } ?? ""
                 return ([], "Torn API: \(msg)\(code)")
             }
-            // v2 shape: inventory is an OBJECT { items: [{id, amount, name,
-            // faction_owned, ...}], timestamp }, NOT an array; quantity is `amount`.
-            let inv = root["inventory"] as? [String: Any] ?? [:]
-            let items = inv["items"] as? [[String: Any]] ?? []
-            let parsed: [InventoryEntry] = items.compactMap { o in
-                guard let name = o["name"] as? String else { return nil }
+            // v2 catalog shape: { "items": [ {id, name, type, sub_type, ...} ] }.
+            let rawItems = root["items"] as? [[String: Any]] ?? []
+            let parsed: [InventoryEntry] = rawItems.compactMap { o in
+                guard let name = o["name"] as? String, !name.isEmpty else { return nil }
                 let id = (o["id"] as? Int) ?? Int((o["id"] as? String) ?? "") ?? 0
                 guard id > 0 else { return nil }
-                let qty = (o["amount"] as? Int) ?? (o["quantity"] as? Int) ?? 0
-                return InventoryEntry(id: id, name: name, quantity: qty, category: "")
+                let type = (o["type"] as? String) ?? ""
+                return InventoryEntry(id: id, name: name, quantity: 0, category: type)
             }
             if parsed.isEmpty {
                 let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
-                let snippet = String(data: data.prefix(160), encoding: .utf8) ?? ""
+                let snippet = String(data: data.prefix(200), encoding: .utf8) ?? ""
                 return ([], "Empty (HTTP \(status)): \(snippet)")
             }
-            // Dedupe by item id (weapons appear once per uid) so the picker
-            // shows one pill per item type.
             var seen = Set<Int>()
-            return (parsed.filter { seen.insert($0.id).inserted }, nil)
+            return (parsed.filter { seen.insert($0.id).inserted }.sorted { $0.name < $1.name }, nil)
         } catch {
             return ([], "Network: \(error.localizedDescription)")
         }
