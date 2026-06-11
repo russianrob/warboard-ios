@@ -13,6 +13,7 @@ import UIKit
 /// involves a Torn UI checklist that's not API-postable.
 struct ManagerView: View {
     @EnvironmentObject private var prefs: PrefsStore
+    @Environment(\.dismiss) private var dismiss
     @StateObject private var vm = ManagerViewModel()
     @ObservedObject private var session = TornWebSession.shared
     @State private var sub: SubTab = .missing
@@ -54,6 +55,9 @@ struct ManagerView: View {
         }
         .navigationTitle("Manager")
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("Done") { dismiss() }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button { vm.refresh() } label: {

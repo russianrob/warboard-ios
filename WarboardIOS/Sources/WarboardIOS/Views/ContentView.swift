@@ -13,6 +13,7 @@ struct ContentView: View {
     @State private var showItemPicker = false
     @State private var pickerFaction = false
     @State private var showWarRoom = false
+    @State private var showOCManager = false
     @StateObject private var quickItems = QuickItemsStore()
 
     var body: some View {
@@ -24,7 +25,8 @@ struct ContentView: View {
                 showItemPicker = true
             },
             onShowNotifications: { showNotifications = true },
-            onShowWarRoom: { showWarRoom = true }
+            onShowWarRoom: { showWarRoom = true },
+            onShowOCManager: { showOCManager = true }
         )
         // App-wide shout banner — listens to RealtimeClient.globalToast
         // so a broadcast surfaces over the browser.
@@ -37,6 +39,9 @@ struct ContentView: View {
         }
         .fullScreenCover(isPresented: $showWarRoom) {
             NavigationStack { WarRoomView() }
+        }
+        .fullScreenCover(isPresented: $showOCManager) {
+            NavigationStack { ManagerView() }
         }
     }
 }

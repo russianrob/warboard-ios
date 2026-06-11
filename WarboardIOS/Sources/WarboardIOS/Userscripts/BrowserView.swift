@@ -197,6 +197,8 @@ public struct BrowserView: View {
     /// full-screen cover). Comes in as a closure for the same framework→app
     /// reason as the others.
     private let onShowWarRoom: (() -> Void)?
+    /// Opens the app's native OC Manager (same framework→app closure pattern).
+    private let onShowOCManager: (() -> Void)?
     /// Two quick-item lists (persisted/edited by the app target): `personalItems`
     /// for the Items page, `factionItems` for the faction armoury.
     /// `onEditQuickItems` opens the app's picker for the relevant list — its Bool
@@ -208,12 +210,14 @@ public struct BrowserView: View {
                 factionItems: [QuickItem] = [],
                 onEditQuickItems: ((Bool) -> Void)? = nil,
                 onShowNotifications: (() -> Void)? = nil,
-                onShowWarRoom: (() -> Void)? = nil) {
+                onShowWarRoom: (() -> Void)? = nil,
+                onShowOCManager: (() -> Void)? = nil) {
         self.personalItems = personalItems
         self.factionItems = factionItems
         self.onEditQuickItems = onEditQuickItems
         self.onShowNotifications = onShowNotifications
         self.onShowWarRoom = onShowWarRoom
+        self.onShowOCManager = onShowOCManager
     }
     @StateObject private var model = BrowserModel()
     @State private var showScripts = false
@@ -330,6 +334,13 @@ public struct BrowserView: View {
             if let onShowWarRoom {
                 Button { onShowWarRoom() } label: {
                     Image(systemName: "shield.lefthalf.filled")
+                }
+            }
+
+            // Native OC Manager (organized-crime slots / armoury / payouts).
+            if let onShowOCManager {
+                Button { onShowOCManager() } label: {
+                    Image(systemName: "briefcase.fill")
                 }
             }
 
