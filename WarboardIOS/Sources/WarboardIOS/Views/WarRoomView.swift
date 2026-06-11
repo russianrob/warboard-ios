@@ -177,7 +177,17 @@ private struct RetaliationTab: View {
                     .listStyle(.plain)
             }
         }
-        .task { await load() }
+        .task {
+            await load(initial: true)
+            // Auto-refresh while the tab is on-screen so new incoming attacks
+            // appear (and age out) without a manual pull. `.task` is cancelled
+            // when the tab/cover goes away, so this stops when not visible.
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 15 * 1_000_000_000)
+                if Task.isCancelled { break }
+                await load()
+            }
+        }
         .refreshable { await load() }
         .sheet(item: $sheet) { $0 }
     }
@@ -211,13 +221,18 @@ private struct RetaliationTab: View {
         }
     }
 
-    private func load() async {
-        loading = true
-        error = nil
+    /// `initial` loads show the spinner and surface errors; background
+    /// auto-refreshes update silently and keep the last good data on failure.
+    private func load(initial: Bool = false) async {
+        if initial { loading = true }
         let r = await TornAPI.fetchFactionAttacks(apiKey: prefs.apiKey)
-        attacks = r.attacks
-        error = r.error
-        loading = false
+        if r.error == nil {
+            attacks = r.attacks
+            error = nil
+        } else if initial {
+            error = r.error
+        }
+        if initial { loading = false }
     }
 
     private func openLink(_ s: String) {

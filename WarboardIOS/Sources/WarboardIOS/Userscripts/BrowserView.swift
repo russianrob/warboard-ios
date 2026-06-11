@@ -11,6 +11,7 @@ import UIKit
 final class BrowserModel: ObservableObject {
     @Published var urlText: String = "https://www.torn.com/index.php"
     @Published var displayURL: String = ""
+    @Published var title: String = ""
     @Published var progress: Double = 0
     @Published var isLoading: Bool = false
     @Published var canGoBack: Bool = false
@@ -149,6 +150,9 @@ private struct BrowserWebView: UIViewRepresentable {
                         if let s = w.url?.absoluteString { model?.urlText = s }
                     }
                 },
+                wv.observe(\.title, options: [.initial, .new]) { [weak model] w, _ in
+                    Task { @MainActor in model?.title = w.title ?? "" }
+                },
                 wv.observe(\.estimatedProgress, options: [.new]) { [weak model] w, _ in
                     Task { @MainActor in model?.progress = w.estimatedProgress }
                 },
@@ -214,6 +218,7 @@ public struct BrowserView: View {
     @StateObject private var model = BrowserModel()
     @State private var showScripts = false
     @State private var toast: String?
+    @FocusState private var addrFocused: Bool
 
     /// One controller per Browser tab. It reads the shared ScriptRegistry, so a
     /// script installed from the Scripts screen or the in-browser installer is
@@ -271,6 +276,14 @@ public struct BrowserView: View {
         }
     }
 
+    /// What the idle (unfocused) address bar shows: the page title, falling back
+    /// to the host, then the raw URL.
+    private var addressLabel: String {
+        if !model.title.isEmpty { return model.title }
+        if let host = URL(string: model.displayURL)?.host { return host }
+        return model.displayURL.isEmpty ? "Search or URL" : model.displayURL
+    }
+
     private var urlBar: some View {
         HStack(spacing: 10) {
             Button(action: model.goBack) { Image(systemName: "chevron.left") }
@@ -278,16 +291,36 @@ public struct BrowserView: View {
             Button(action: model.goForward) { Image(systemName: "chevron.right") }
                 .disabled(!model.canGoForward)
 
-            TextField("URL", text: $model.urlText)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled(true)
-                .keyboardType(.URL)
-                .submitLabel(.go)
-                .onSubmit { model.go() }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-                .background(Color(.secondarySystemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+            // Shows the page title when idle (compact); tap to edit the URL.
+            ZStack {
+                TextField("Search or URL", text: $model.urlText)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled(true)
+                    .keyboardType(.URL)
+                    .submitLabel(.go)
+                    .focused($addrFocused)
+                    .onSubmit { model.go(); addrFocused = false }
+                    .opacity(addrFocused ? 1 : 0)
+                if !addrFocused {
+                    Button { addrFocused = true } label: {
+                        Text(addressLabel)
+                            .font(.footnote)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .foregroundStyle(.primary)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Color(.secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .onChange(of: addrFocused) { _, focused in
+                // Discard an unsubmitted edit when the bar loses focus.
+                if !focused { model.urlText = model.displayURL }
+            }
 
             Button(action: model.reload) {
                 Image(systemName: model.isLoading ? "xmark" : "arrow.clockwise")
