@@ -189,6 +189,10 @@ public struct BrowserView: View {
     /// lives in the app target (it needs PrefsStore), which this framework
     /// can't import, so it comes in as a closure.
     private let onShowNotifications: (() -> Void)?
+    /// Opens the app's native War Room (lives in the app target, presented as a
+    /// full-screen cover). Comes in as a closure for the same framework→app
+    /// reason as the others.
+    private let onShowWarRoom: (() -> Void)?
     /// Two quick-item lists (persisted/edited by the app target): `personalItems`
     /// for the Items page, `factionItems` for the faction armoury.
     /// `onEditQuickItems` opens the app's picker for the relevant list — its Bool
@@ -199,11 +203,13 @@ public struct BrowserView: View {
     public init(personalItems: [QuickItem] = [],
                 factionItems: [QuickItem] = [],
                 onEditQuickItems: ((Bool) -> Void)? = nil,
-                onShowNotifications: (() -> Void)? = nil) {
+                onShowNotifications: (() -> Void)? = nil,
+                onShowWarRoom: (() -> Void)? = nil) {
         self.personalItems = personalItems
         self.factionItems = factionItems
         self.onEditQuickItems = onEditQuickItems
         self.onShowNotifications = onShowNotifications
+        self.onShowWarRoom = onShowWarRoom
     }
     @StateObject private var model = BrowserModel()
     @State private var showScripts = false
@@ -285,6 +291,13 @@ public struct BrowserView: View {
 
             Button(action: model.reload) {
                 Image(systemName: model.isLoading ? "xmark" : "arrow.clockwise")
+            }
+
+            // Native War Room (live targets / FF / online / hospital).
+            if let onShowWarRoom {
+                Button { onShowWarRoom() } label: {
+                    Image(systemName: "shield.lefthalf.filled")
+                }
             }
 
             // App actions + per-page script actions (GM_registerMenuCommand).

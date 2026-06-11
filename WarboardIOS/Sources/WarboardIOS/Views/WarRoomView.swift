@@ -16,6 +16,7 @@ enum WarSubTab: String, CaseIterable, Identifiable {
 
 struct WarRoomView: View {
     @EnvironmentObject private var prefs: PrefsStore
+    @Environment(\.dismiss) private var dismiss
     @StateObject private var vm = WarRoomViewModel()
     @State private var nowMs: Int64 = Int64(Date().timeIntervalSince1970 * 1000)
     @State private var subTab: WarSubTab = .targets
@@ -64,6 +65,9 @@ struct WarRoomView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button("Done") { dismiss() }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button(action: { showShout = true }) {
                     Image(systemName: "megaphone.fill")
