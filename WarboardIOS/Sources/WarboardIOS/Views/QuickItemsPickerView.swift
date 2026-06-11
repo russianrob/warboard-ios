@@ -7,6 +7,8 @@ import WarboardIOS
 /// personal-inventory API, so — like TornPDA — items come from the catalog.)
 struct QuickItemsPickerView: View {
     @ObservedObject var store: QuickItemsStore
+    /// false = personal (Items page) list, true = faction (armoury) list.
+    var faction: Bool = false
     @EnvironmentObject private var prefs: PrefsStore
     @Environment(\.dismiss) private var dismiss
 
@@ -43,7 +45,7 @@ struct QuickItemsPickerView: View {
                 } else {
                     List(filtered) { item in
                         Button {
-                            store.toggle(QuickItem(id: item.id, name: item.name))
+                            store.toggle(QuickItem(id: item.id, name: item.name), faction: faction)
                         } label: {
                             HStack(spacing: 10) {
                                 AsyncImage(url: URL(string: "https://www.torn.com/images/items/\(item.id)/medium.png")) { i in
@@ -57,15 +59,15 @@ struct QuickItemsPickerView: View {
                                     }
                                 }
                                 Spacer()
-                                Image(systemName: store.contains(item.id) ? "checkmark.circle.fill" : "circle")
-                                    .foregroundStyle(store.contains(item.id) ? Color.accentColor : Color.secondary)
+                                Image(systemName: store.contains(item.id, faction: faction) ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(store.contains(item.id, faction: faction) ? Color.accentColor : Color.secondary)
                             }
                         }
                     }
                     .searchable(text: $search, prompt: "Search items")
                 }
             }
-            .navigationTitle("Quick Items")
+            .navigationTitle(faction ? "Faction Quick Items" : "Quick Items")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }

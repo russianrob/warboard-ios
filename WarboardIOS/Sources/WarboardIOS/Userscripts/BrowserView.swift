@@ -189,14 +189,19 @@ public struct BrowserView: View {
     /// lives in the app target (it needs PrefsStore), which this framework
     /// can't import, so it comes in as a closure.
     private let onShowNotifications: (() -> Void)?
-    /// The user's quick items (owned + persisted by the app target) and the
-    /// hook that opens the app's inventory picker to edit them.
-    private let quickItems: [QuickItem]
-    private let onEditQuickItems: (() -> Void)?
-    public init(quickItems: [QuickItem] = [],
-                onEditQuickItems: (() -> Void)? = nil,
+    /// Two quick-item lists (persisted/edited by the app target): `personalItems`
+    /// for the Items page, `factionItems` for the faction armoury.
+    /// `onEditQuickItems` opens the app's picker for the relevant list — its Bool
+    /// is the faction scope (true = armoury list).
+    private let personalItems: [QuickItem]
+    private let factionItems: [QuickItem]
+    private let onEditQuickItems: ((Bool) -> Void)?
+    public init(personalItems: [QuickItem] = [],
+                factionItems: [QuickItem] = [],
+                onEditQuickItems: ((Bool) -> Void)? = nil,
                 onShowNotifications: (() -> Void)? = nil) {
-        self.quickItems = quickItems
+        self.personalItems = personalItems
+        self.factionItems = factionItems
         self.onEditQuickItems = onEditQuickItems
         self.onShowNotifications = onShowNotifications
     }
@@ -218,12 +223,12 @@ public struct BrowserView: View {
                 VStack(spacing: 0) {
                     urlBar
                     progressBar
-                    if !quickItems.isEmpty {
+                    if let faction = quickItemsScope(model.displayURL) {
                         QuickItemsBar(
-                            items: quickItems,
-                            factionMode: isFactionArmoury(model.displayURL),
+                            items: faction ? factionItems : personalItems,
+                            factionMode: faction,
                             onUse: { useQuickItem($0) },
-                            onEdit: { onEditQuickItems?() }
+                            onEdit: { onEditQuickItems?(faction) }
                         )
                     }
                 }
@@ -292,7 +297,7 @@ public struct BrowserView: View {
                     }
                 }
                 if let onEditQuickItems {
-                    Button { onEditQuickItems() } label: {
+                    Button { onEditQuickItems(isFactionArmoury(model.displayURL)) } label: {
                         Label("Quick Items…", systemImage: "bolt.fill")
                     }
                 }
@@ -336,6 +341,18 @@ public struct BrowserView: View {
     private func isFactionArmoury(_ url: String) -> Bool {
         let u = url.lowercased()
         return u.contains("factions.php") && (u.contains("tab=armoury") || u.contains("tab=armory"))
+    }
+
+    private func isItemsPage(_ url: String) -> Bool {
+        url.lowercased().contains("item.php")
+    }
+
+    /// Which quick-items list applies to the current page: false = personal
+    /// (Items page), true = faction (armoury), nil = show no bar.
+    private func quickItemsScope(_ url: String) -> Bool? {
+        if isFactionArmoury(url) { return true }
+        if isItemsPage(url) { return false }
+        return nil
     }
 
     /// Fire Torn's own item-use action inside the live, logged-in web session —

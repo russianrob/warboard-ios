@@ -11,12 +11,17 @@ import WarboardIOS
 struct ContentView: View {
     @State private var showNotifications = false
     @State private var showItemPicker = false
+    @State private var pickerFaction = false
     @StateObject private var quickItems = QuickItemsStore()
 
     var body: some View {
         BrowserView(
-            quickItems: quickItems.items,
-            onEditQuickItems: { showItemPicker = true },
+            personalItems: quickItems.personalItems,
+            factionItems: quickItems.factionItems,
+            onEditQuickItems: { faction in
+                pickerFaction = faction
+                showItemPicker = true
+            },
             onShowNotifications: { showNotifications = true }
         )
         // App-wide shout banner — listens to RealtimeClient.globalToast
@@ -26,7 +31,7 @@ struct ContentView: View {
             NavigationStack { NotificationSettingsView() }
         }
         .sheet(isPresented: $showItemPicker) {
-            QuickItemsPickerView(store: quickItems)
+            QuickItemsPickerView(store: quickItems, faction: pickerFaction)
         }
     }
 }
