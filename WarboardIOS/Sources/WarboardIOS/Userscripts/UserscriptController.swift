@@ -330,20 +330,23 @@ extension UserscriptController {
     /// would bind to THAT instead of the global — leaving `window.eruda`
     /// undefined and the console invisible. We hide define/module/exports across
     /// the eval, then init.
-    private static func erudaInjection(_ source: String) -> String {
+    private static func erudaInjection(_ source: String, show: Bool) -> String {
         return """
         (function(){
           var _d = window.define, _m = window.module, _e = window.exports;
           try { window.define = undefined; window.module = undefined; window.exports = undefined; } catch (e) {}
+          var err = '';
           try {
         \(source)
-          } catch (e) {}
+          } catch (e) { err = String(e); }
           try { window.define = _d; window.module = _m; window.exports = _e; } catch (e) {}
           try {
             if (window.eruda) {
-              if (!window.__wbEruda) { eruda.init(); window.__wbEruda = true; } else { eruda.show(); }
+              if (!window.__wbEruda) { eruda.init(); window.__wbEruda = true; }
+              \(show ? "try { eruda.show(); } catch (e) {}" : "")
             }
-          } catch (e) {}
+          } catch (e) { if (!err) err = String(e); }
+          return JSON.stringify({ eruda: typeof window.eruda, inited: !!window.__wbEruda, err: err });
         })();
         """
     }
@@ -355,8 +358,15 @@ extension UserscriptController {
         guard let wv = webView else { return }
         if on {
             Task { @MainActor in
-                guard let src = await loadErudaSource(), let wv = self.webView else { return }
-                wv.evaluateJavaScript(Self.erudaInjection(src), completionHandler: nil)
+                guard let src = await loadErudaSource(), let wv = self.webView else {
+                    WebDiag.log("devtools", ["phase": "no-source-or-webview"])
+                    return
+                }
+                wv.evaluateJavaScript(Self.erudaInjection(src, show: true)) { result, error in
+                    WebDiag.log("devtools", ["phase": "toggle-on",
+                                             "status": "\(result ?? "nil")",
+                                             "error": error.map { "\($0)" } ?? ""])
+                }
             }
         } else {
             wv.evaluateJavaScript("try{if(window.eruda&&eruda.hide)eruda.hide();}catch(e){}", completionHandler: nil)
@@ -367,7 +377,7 @@ extension UserscriptController {
         guard devToolsEnabled else { return }
         Task { @MainActor in
             guard let src = await loadErudaSource(), let wv = self.webView else { return }
-            wv.evaluateJavaScript(Self.erudaInjection(src), completionHandler: nil)
+            wv.evaluateJavaScript(Self.erudaInjection(src, show: false), completionHandler: nil)
         }
     }
 
