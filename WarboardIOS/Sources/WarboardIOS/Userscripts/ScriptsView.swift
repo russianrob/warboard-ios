@@ -150,9 +150,11 @@ final class ScriptsViewModel: ObservableObject {
 public struct ScriptsView: View {
     public init() {}
     @StateObject private var vm = ScriptsViewModel()
+    @State private var extTick = 0
 
     public var body: some View {
         List {
+            extensionsSection
             addSection
             if let msg = vm.errorMessage {
                 Section { Text(msg).foregroundStyle(.red).font(.footnote) }
@@ -171,6 +173,33 @@ public struct ScriptsView: View {
             ToolbarItem(placement: .topBarTrailing) { EditButton() }
         }
         .onAppear { vm.reload() }
+    }
+
+    /// Bundled WebExtensions (ReTorn) with an on/off switch. Toggling persists to
+    /// ExtensionPrefs and posts `.userscriptsDidChange` so the live page rebuilds
+    /// with the extension gated in/out immediately.
+    @ViewBuilder private var extensionsSection: some View {
+        let exts = ExtensionRuntime.shared.installedExtensions
+        if !exts.isEmpty {
+            Section("Extensions") {
+                ForEach(exts) { ext in
+                    Toggle(isOn: Binding(
+                        get: { _ = extTick; return ExtensionPrefs.shared.isEnabled(ext.id) },
+                        set: { on in
+                            ExtensionRuntime.shared.setExtensionEnabled(ext.id, on)
+                            extTick &+= 1
+                            NotificationCenter.default.post(name: .userscriptsDidChange, object: nil)
+                        }
+                    )) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(ext.name)
+                            Text("v\(ext.version) · \(ext.attribution)")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private var addSection: some View {

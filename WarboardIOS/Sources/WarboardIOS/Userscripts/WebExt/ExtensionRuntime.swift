@@ -14,6 +14,23 @@ final class ExtensionRuntime {
     private let relay: ExtMessageRelay
     private let backgroundHost: ExtBackgroundHost?
     private static let worldName = "retorn"
+    /// The one bundled extension's id (the on/off flag key + catalog id).
+    static let retornID = "retorn"
+
+    /// A bundled extension, surfaced to the in-app extension manager.
+    struct ExtensionInfo: Identifiable {
+        let id: String
+        let name: String
+        let version: String
+        let attribution: String
+    }
+
+    /// The installed (bundled) extensions, for the Scripts-screen manager.
+    var installedExtensions: [ExtensionInfo] {
+        guard let manifest = manifest else { return [] }
+        return [ExtensionInfo(id: Self.retornID, name: "ReTorn",
+                              version: manifest.version, attribution: "Heasleys4hemp")]
+    }
 
     /// `tabs.create` → open a URL in the app browser. Set by the webview host.
     var onOpenURL: ((String) -> Void)? {
@@ -61,12 +78,29 @@ final class ExtensionRuntime {
     /// background host. (The resource scheme is registered by UserscriptController.)
     func install(on config: WKWebViewConfiguration) {
         relay.register(on: config.userContentController, world: WKContentWorld.world(name: Self.worldName))
-        backgroundHost?.start()
+        // Only spin up the hidden background host (which loads _background.js and
+        // fires onInstalled → seeds storage) when the extension is enabled, so a
+        // user with ReTorn toggled off gets no background webview or side effects.
+        if ExtensionPrefs.shared.isEnabled(Self.retornID) {
+            backgroundHost?.start()
+        }
+    }
+
+    /// Persist an extension's on/off state and reconcile the background host:
+    /// enabling starts it (idempotent — `start()` guards against a second webview).
+    /// Page injection is gated separately, so disabling just stops re-injection on
+    /// the next navigation (the caller reloads the page to apply it immediately).
+    func setExtensionEnabled(_ id: String, _ enabled: Bool) {
+        ExtensionPrefs.shared.setEnabled(id, enabled)
+        if id == Self.retornID, enabled {
+            backgroundHost?.start()
+        }
     }
 
     /// Shim + matching content scripts (+ CSS) for `url`, in the "retorn" world.
+    /// Returns nothing when the extension is toggled off in the manager.
     func contentWorldScripts(for url: URL) -> [WKUserScript] {
-        guard let manifest = manifest else { return [] }
+        guard let manifest = manifest, ExtensionPrefs.shared.isEnabled(Self.retornID) else { return [] }
         let world = WKContentWorld.world(name: Self.worldName)
         let urlString = url.absoluteString
         var scripts: [WKUserScript] = []
@@ -95,6 +129,30 @@ final class ExtensionRuntime {
             }
         }
         return scripts
+    }
+
+    /// Main-world (`.page`) injections. ReTorn's `inject_interceptFetch.js` must
+    /// run in the page world to patch the page's real `fetch` (so it sees Torn's
+    /// own API traffic, CORS-free) and to reach Torn's page globals (getRFC,
+    /// Handlebars, $). It dispatches CustomEvents on `document` — mini-profiles,
+    /// RFC token, jail refresh, ranked/territory-war filters — which WebKit
+    /// delivers to the listeners ReTorn registers in the "retorn" content world.
+    /// (The bundled script self-guards against double-injection.) Gated by the
+    /// manager toggle, same as the content-world scripts.
+    func mainWorldScripts(for url: URL) -> [WKUserScript] {
+        guard let manifest = manifest, ExtensionPrefs.shared.isEnabled(Self.retornID),
+              let js = Self.bundledText("inject/inject_interceptFetch.js") else { return [] }
+        // Inject on exactly the pages where ReTorn's content world (which holds
+        // the CustomEvent listeners) runs — i.e. the content script that loads
+        // retorn.js — honoring its exclude_matches (api.html, wiki, swagger)
+        // rather than a blanket torn.com pattern. No point patching the page's
+        // fetch (esp. the API-key page) where nothing listens.
+        let urlString = url.absoluteString
+        let injectorRuns = manifest.contentScripts.contains { cs in
+            (cs.js ?? []).contains { $0.hasSuffix("everywhere/retorn.js") } && matches(urlString, cs)
+        }
+        guard injectorRuns else { return [] }
+        return [WKUserScript(source: js, injectionTime: .atDocumentStart, forMainFrameOnly: true)]
     }
 
     private func matches(_ url: String, _ cs: ExtManifest.ContentScript) -> Bool {

@@ -178,6 +178,14 @@ final class UserscriptController: NSObject, ObservableObject {
         for ws in ExtensionRuntime.shared.contentWorldScripts(for: url) {
             userContent.addUserScript(ws)
         }
+
+        // 7. WebExtension main-world (.page) injections — ReTorn's fetch
+        //    interceptor, which must run in the page world to patch Torn's real
+        //    fetch + reach page globals; it bridges back to the content world
+        //    via cross-world DOM CustomEvents.
+        for ws in ExtensionRuntime.shared.mainWorldScripts(for: url) {
+            userContent.addUserScript(ws)
+        }
     }
 
     /// Torn intercepts `target="_blank"` link clicks before WebKit can open a

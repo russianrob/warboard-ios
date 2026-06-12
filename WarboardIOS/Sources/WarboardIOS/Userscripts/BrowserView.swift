@@ -285,8 +285,11 @@ public struct BrowserView: View {
         }
         .onAppear {
             // Route ReTorn's in-page "Options" button (runtime.openOptionsPage →
-            // openExtPage) to the same sheet the ⋯ menu opens.
-            ExtensionRuntime.shared.onOpenExtPage = { _ in onShowExtOptions?() }
+            // openExtPage) to the same sheet the ⋯ menu opens — but only while the
+            // extension is enabled (off means off).
+            ExtensionRuntime.shared.onOpenExtPage = { _ in
+                if ExtensionPrefs.shared.isEnabled(ExtensionRuntime.retornID) { onShowExtOptions?() }
+            }
         }
     }
 
@@ -372,7 +375,7 @@ public struct BrowserView: View {
                     Label(controller.devToolsEnabled ? "Dev Tools: On" : "Dev Tools",
                           systemImage: controller.devToolsEnabled ? "ladybug.fill" : "ladybug")
                 }
-                if let onShowExtOptions {
+                if let onShowExtOptions, ExtensionPrefs.shared.isEnabled(ExtensionRuntime.retornID) {
                     Button { onShowExtOptions() } label: {
                         Label("ReTorn Options…", systemImage: "puzzlepiece.extension")
                     }
