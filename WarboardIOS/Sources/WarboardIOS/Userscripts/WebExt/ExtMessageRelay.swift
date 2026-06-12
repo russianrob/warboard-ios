@@ -52,7 +52,16 @@ final class ExtMessageRelay: NSObject, WKScriptMessageHandlerWithReply {
             if (body["op"] as? String) == "create",
                let props = body["props"] as? [String: Any],
                let url = props["url"] as? String {
-                onOpenURL?(url)
+                if url.hasPrefix("\(ExtResourceScheme.scheme)://") {
+                    // An extension page opened as a tab (e.g. options.html via
+                    // options_ui.open_in_tab). Present it in the extension-page
+                    // sheet, which serves webext:// + injects this extension's
+                    // shim/relay. The browser tab's config has neither, so loading
+                    // it there just renders blank.
+                    onOpenExtPage?("options")
+                } else {
+                    onOpenURL?(url)
+                }
             }
             replyHandler(nil, nil)
         case "openExtPage":
