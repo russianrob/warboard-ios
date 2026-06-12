@@ -58,6 +58,10 @@ final class ExtMessageRelay: NSObject, WKScriptMessageHandlerWithReply {
         case "openExtPage":
             onOpenExtPage?((body["page"] as? String) ?? "options")
             replyHandler(nil, nil)
+        case "diag":
+            // Content-world instrumentation (debug extensions only) → server log.
+            WebDiag.log("webext-content-diag", body)
+            replyHandler(nil, nil)
         case "alarms":
             // Phase-1 stub: `get` returns a scheduledTime so popup timing code
             // doesn't break; create/clear are no-ops until Phase 3.

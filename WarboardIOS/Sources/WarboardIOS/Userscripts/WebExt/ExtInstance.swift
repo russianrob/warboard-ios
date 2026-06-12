@@ -22,6 +22,9 @@ final class ExtInstance {
     /// file ending in this suffix runs (honors its exclude_matches); nil = any
     /// matched page.
     private let injectorSuffix: String?
+    /// When true, bracket this extension's content scripts with diag markers + a
+    /// window.onerror capture (→ server log) to find where a script throws/hangs.
+    private let debug: Bool
 
     var isEnabled: Bool { ExtensionPrefs.shared.isEnabled(id) }
     var info: ExtensionRuntime.ExtensionInfo {
@@ -30,7 +33,7 @@ final class ExtInstance {
     private var world: WKContentWorld { .world(name: id) }
 
     init?(id: String, name: String, attribution: String,
-          mainWorldInjects: [String] = [], injectorSuffix: String? = nil) {
+          mainWorldInjects: [String] = [], injectorSuffix: String? = nil, debug: Bool = false) {
         guard let manifest = ExtManifest.load(id: id) else { return nil }
         self.id = id
         self.name = name
@@ -38,6 +41,7 @@ final class ExtInstance {
         self.manifest = manifest
         self.mainWorldInjects = mainWorldInjects
         self.injectorSuffix = injectorSuffix
+        self.debug = debug
         self.storage = ExtStorage(id: id)
         self.relay = ExtMessageRelay(storage: storage)
         self.backgroundHost = ExtBackgroundHost(id: id, relay: relay,
@@ -66,6 +70,10 @@ final class ExtInstance {
                 scripts.append(WKUserScript(
                     source: header + WebExtShimJS.source,
                     injectionTime: .atDocumentStart, forMainFrameOnly: true, in: world))
+                if debug {
+                    scripts.append(WKUserScript(source: diagSetupJS,
+                                                injectionTime: .atDocumentStart, forMainFrameOnly: true, in: world))
+                }
                 shimInjected = true
             }
             let timing: WKUserScriptInjectionTime =
@@ -77,13 +85,37 @@ final class ExtInstance {
                 }
             }
             for jsPath in cs.js ?? [] {
+                let scriptName = (jsPath as NSString).lastPathComponent
+                if debug { scripts.append(diagMarker("before", scriptName, timing)) }
                 if let js = bundledText(ExtManifest.normalized(jsPath)) {
                     scripts.append(WKUserScript(source: js,
                                                 injectionTime: timing, forMainFrameOnly: true, in: world))
                 }
+                if debug { scripts.append(diagMarker("after", scriptName, timing)) }
             }
         }
         return scripts
+    }
+
+    /// Defines `__wbdiagPost` (posts to the relay's `kind:'diag'`) + captures
+    /// uncaught errors/rejections in this content world. Injected after the shim
+    /// when `debug`, so before/after markers can bracket each content script.
+    private var diagSetupJS: String {
+        """
+        (function(){
+          if (window.__wbdiag) return; window.__wbdiag = 1;
+          function p(o){ try{ window.webkit.messageHandlers.webextBridge.postMessage(Object.assign({kind:'diag',ext:'\(id)'},o)); }catch(e){} }
+          window.__wbdiagPost = p;
+          p({stage:'setup'});
+          window.addEventListener('error', function(e){ p({stage:'onerror', msg:String(e.message||'')+' @ '+String(e.filename||'').split('/').pop()+':'+(e.lineno||0)+':'+(e.colno||0)}); }, true);
+          window.addEventListener('unhandledrejection', function(e){ var r=e&&e.reason; p({stage:'rejection', msg:String((r&&r.message)||r||'').slice(0,200)}); });
+        })();
+        """
+    }
+
+    private func diagMarker(_ stage: String, _ name: String, _ timing: WKUserScriptInjectionTime) -> WKUserScript {
+        let src = "try{window.__wbdiagPost&&window.__wbdiagPost({stage:'\(stage)',n:'\(name)'});}catch(e){}"
+        return WKUserScript(source: src, injectionTime: timing, forMainFrameOnly: true, in: world)
     }
 
     /// Main-world (`.page`) injects — fetch interceptors etc. that must touch the
