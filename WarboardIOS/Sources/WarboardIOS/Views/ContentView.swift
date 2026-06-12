@@ -14,7 +14,7 @@ struct ContentView: View {
     @State private var pickerFaction = false
     @State private var showWarRoom = false
     @State private var showOCManager = false
-    @State private var extOptionsTarget: ExtensionRuntime.ExtOptionsTarget?
+    @State private var extOptionsTarget: ExtOptionsTarget?
     @StateObject private var quickItems = QuickItemsStore()
 
     var body: some View {

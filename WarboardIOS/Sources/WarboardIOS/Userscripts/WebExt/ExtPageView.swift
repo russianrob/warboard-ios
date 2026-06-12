@@ -16,7 +16,7 @@ public struct ExtPageView: View {
     ///   - extId: the bundled extension id (resource folder / `webext://` host).
     ///   - page: bundle-relative page path, e.g. `"options.html"`.
     ///   - title: navigation bar title.
-    public init(extId: String = ExtensionRuntime.retornID, page: String, title: String) {
+    public init(extId: String, page: String, title: String) {
         self.extId = extId
         self.page = page
         self.title = title

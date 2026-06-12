@@ -7,6 +7,17 @@ import WebKit
 /// runtime fans those out to every enabled extension. Each extension is fully
 /// isolated (own content world, background host, storage namespace, `webext://<id>`
 /// origin), so adding another is just another `ExtInstance` in the catalog below.
+
+/// A presentable extension options page: which extension, which page, title.
+/// Top-level + public so it can cross the framework→app boundary (BrowserView's
+/// public init parameter and ContentView's `@State` both name it).
+public struct ExtOptionsTarget: Identifiable, Equatable {
+    public let extId: String
+    public let page: String
+    public let title: String
+    public var id: String { extId }
+}
+
 final class ExtensionRuntime {
     static let shared = ExtensionRuntime()
     /// ReTorn's id — used by the app for the (currently ReTorn-only) options entry.
@@ -20,14 +31,6 @@ final class ExtensionRuntime {
         let attribution: String
         /// Bundle-relative options page (from `options_ui.page`), or nil.
         let optionsPage: String?
-    }
-
-    /// A presentable extension options page: which extension, which page, title.
-    struct ExtOptionsTarget: Identifiable, Equatable {
-        let extId: String
-        let page: String
-        let title: String
-        var id: String { extId }
     }
 
     private let instances: [ExtInstance]

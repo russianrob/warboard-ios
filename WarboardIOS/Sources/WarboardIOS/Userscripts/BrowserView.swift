@@ -92,6 +92,18 @@ final class BrowserModel: ObservableObject {
     }
 }
 
+/// Routes an OS-delivered URL (default-browser open, shared link, Universal
+/// Link) into the Browser tab. The app's `.onOpenURL` sets `pendingURL`;
+/// `BrowserView` drains it via `.onReceive`, and `BrowserModel.load` queues it
+/// if the web view isn't mounted yet, so cold-launch opens still land.
+@MainActor
+public final class BrowserRouter: ObservableObject {
+    public static let shared = BrowserRouter()
+    @Published public var pendingURL: URL?
+    private init() {}
+    public func open(_ url: URL) { pendingURL = url }
+}
+
 /// Bridges the WKWebView into SwiftUI and wires the UserscriptController
 /// so the engine rebuilds the injected WKUserScript set on every
 /// navigation. Generalizes WKWebViewRepresentable from
@@ -202,7 +214,7 @@ public struct BrowserView: View {
     /// Presents an extension's options page in a sheet, for the extension that
     /// asked. The ⋯ menu items and the in-page "Options" button
     /// (runtime.openOptionsPage) both route here.
-    private let onShowExtOptions: ((ExtensionRuntime.ExtOptionsTarget) -> Void)?
+    private let onShowExtOptions: ((ExtOptionsTarget) -> Void)?
     /// Two quick-item lists (persisted/edited by the app target): `personalItems`
     /// for the Items page, `factionItems` for the faction armoury.
     /// `onEditQuickItems` opens the app's picker for the relevant list — its Bool
@@ -216,7 +228,7 @@ public struct BrowserView: View {
                 onShowNotifications: (() -> Void)? = nil,
                 onShowWarRoom: (() -> Void)? = nil,
                 onShowOCManager: (() -> Void)? = nil,
-                onShowExtOptions: ((ExtensionRuntime.ExtOptionsTarget) -> Void)? = nil) {
+                onShowExtOptions: ((ExtOptionsTarget) -> Void)? = nil) {
         self.personalItems = personalItems
         self.factionItems = factionItems
         self.onEditQuickItems = onEditQuickItems
@@ -293,6 +305,11 @@ public struct BrowserView: View {
                       let target = ExtensionRuntime.shared.optionsTarget(for: extId) else { return }
                 onShowExtOptions?(target)
             }
+        }
+        // OS-level link opens (default browser / shared URL) → load in this tab.
+        .onReceive(BrowserRouter.shared.$pendingURL.compactMap { $0 }) { url in
+            BrowserRouter.shared.pendingURL = nil
+            model.load(url)
         }
     }
 

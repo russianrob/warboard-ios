@@ -42,6 +42,14 @@ struct WarboardIOSApp: App {
                         barReporter.stop()
                     }
                 }
+                .onOpenURL { url in
+                    // Default-browser / shared-link / Universal-Link opens land
+                    // here → show them in the in-app browser tab. Non-web schemes
+                    // are ignored. (Requires the web-browser entitlement to be the
+                    // system default browser; also works for shared http(s) URLs.)
+                    guard url.scheme == "http" || url.scheme == "https" else { return }
+                    BrowserRouter.shared.open(url)
+                }
         }
     }
 }
