@@ -48,13 +48,19 @@ enum WebExtShimJS {
         for (var i = 0; i < arr.length; i++) { try { arr[i](details); } catch (e) {} }
       };
 
-      // Native fires this on every background boot so the extension's onStartup
-      // handler runs its startup migration/seed (independent of the one-time
-      // onInstalled event, which is missed if the bg aborted before registering it).
-      window.__webext_fireStartup = function () {
+      // Fire onStartup exactly once per bg boot. BOTH the host (on bg load) and
+      // onStartup.addListener (on registration) call this, so a host/registration
+      // timing race can't make the startup seed get missed. Returns how many
+      // startup listeners were invoked (diagnostic).
+      var __startupFired = false;
+      function __fireStartupOnce() {
+        if (__startupFired) return listeners.startup.length;
+        __startupFired = true;
         var arr = listeners.startup;
         for (var i = 0; i < arr.length; i++) { try { arr[i](); } catch (e) {} }
-      };
+        return arr.length;
+      }
+      window.__webext_fireStartup = function () { return __fireStartupOnce(); };
 
       // Health probe (native diagnostics): how many onMessage listeners registered.
       window.__webext_listenerCount = function () { return listeners.message.length; };
@@ -94,7 +100,16 @@ enum WebExtShimJS {
           sendMessage: function (msg, cb) { return cbWrap(post({ kind: 'sendMessage', message: msg }), cb); },
           onMessage: event('message'),
           onInstalled: event('installed'),
-          onStartup: event('startup'),
+          onStartup: {
+            addListener: function (fn) {
+              if (typeof fn !== 'function') return;
+              listeners.startup.push(fn);
+              // Our persistent bg = "startup" the moment a handler registers;
+              // fire on the next tick so it can't be missed by host timing.
+              setTimeout(function () { __fireStartupOnce(); }, 50);
+            },
+            removeListener: function () {}, hasListener: function () { return false; }
+          },
           connect: function () { return { onMessage: { addListener: function () {} }, postMessage: function () {}, disconnect: function () {} }; },
           getURL: function (p) { return 'webext://' + (window.__webext_id || 'retorn') + '/' + String(p || '').replace(/^\//, ''); },
           getManifest: function () { return { manifest_version: 3, version: (window.__webext_version || '0') }; },

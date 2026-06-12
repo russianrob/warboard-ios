@@ -12,7 +12,7 @@ import Foundation
 /// accepts every WKScriptMessage value type and round-trips faithfully.
 final class ExtStorage {
     private let defaults: UserDefaults
-    private let id: String
+    let id: String
 
     init(id: String, defaults: UserDefaults = UserDefaults(suiteName: "group.com.tornwar.warboard") ?? .standard) {
         self.id = id

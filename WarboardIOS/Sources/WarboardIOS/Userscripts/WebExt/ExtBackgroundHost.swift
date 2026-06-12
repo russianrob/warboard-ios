@@ -150,12 +150,12 @@ final class ExtBackgroundHost: NSObject, WKNavigationDelegate {
     /// robust seed path: unlike the one-time `onInstalled`, it can't be burned
     /// by a prior boot that aborted before registering the install listener.
     private func fireStartup() {
-        WebDiag.log("webext-fire-startup", ["id": id])
         Task { @MainActor [weak self] in
-            guard let wv = self?.webView else { return }
-            _ = try? await wv.callAsyncJavaScript(
-                "window.__webext_fireStartup && window.__webext_fireStartup();",
+            guard let self, let wv = self.webView else { return }
+            let result = try? await wv.callAsyncJavaScript(
+                "return (window.__webext_fireStartup ? window.__webext_fireStartup() : -1);",
                 arguments: [:], in: nil, contentWorld: .page)
+            WebDiag.log("webext-fire-startup", ["id": self.id, "listeners": (result as? Int) ?? -1])
         }
     }
 

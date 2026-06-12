@@ -100,9 +100,16 @@ final class ExtMessageRelay: NSObject, WKScriptMessageHandlerWithReply {
         let area = (body["area"] as? String) ?? "local"
         switch body["op"] as? String {
         case "get":
-            reply(storage.get(area: area, keys: body["keys"]), nil)
+            let result = storage.get(area: area, keys: body["keys"])
+            if storage.id == "torntools" && (result.isEmpty || result["settings"] != nil) {
+                WebDiag.log("webext-storage-get", ["area": area, "n": result.keys.count, "hasSettings": result["settings"] != nil])
+            }
+            reply(result, nil)
         case "set":
             if let items = body["items"] as? [String: Any] {
+                if storage.id == "torntools" && items["settings"] != nil {
+                    WebDiag.log("webext-storage-set", ["area": area, "n": items.keys.count])
+                }
                 storage.set(area: area, items: items)
             }
             reply(nil, nil)
@@ -110,6 +117,7 @@ final class ExtMessageRelay: NSObject, WKScriptMessageHandlerWithReply {
             storage.remove(area: area, keys: body["keys"])
             reply(nil, nil)
         case "clear":
+            if storage.id == "torntools" { WebDiag.log("webext-storage-clear", ["area": area]) }
             storage.clear(area: area)
             reply(nil, nil)
         default:
