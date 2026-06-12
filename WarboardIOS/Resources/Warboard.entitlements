@@ -8,5 +8,13 @@
 	<array>
 		<string>group.com.tornwar.warboard</string>
 	</array>
+	<!-- Default Browser App entitlement: lets Warboard appear in iOS
+	     Settings > Default Browser App. MANAGED entitlement — Apple must grant
+	     it on the com.tornwar.warboard App ID first, then the "Warboard App
+	     Store" provisioning profile must be regenerated to include it and the
+	     IOS_PROVISIONING_PROFILE_BASE64 CI secret updated, or Manual signing
+	     fails. Staged on the web-browser-entitlement branch for that reason. -->
+	<key>com.apple.developer.web-browser</key>
+	<true/>
 </dict>
 </plist>
