@@ -14,9 +14,41 @@ enum WebExtShimJS {
     (function () {
       if (window.browser && window.browser.__wbExt) return;
 
+      // The hidden background host runs in a custom-scheme, non-secure-origin
+      // WKWebView that does NOT expose the Web Notifications API. TornTools'
+      // DEFAULT_STORAGE has a default thunk `() => Notification.permission ===
+      // "granted"`, which getDefaultStorage() CALLS while seeding defaults; an
+      // unshimmed `Notification` makes it throw, the throw is swallowed by
+      // reset()'s `new Promise(async)`, and defaults never seed. Stub a denied
+      // Notification so the thunk returns false instead of throwing.
+      if (typeof window.Notification === 'undefined') {
+        var Notif = function () {};
+        Notif.permission = 'denied';
+        Notif.requestPermission = function () { return Promise.resolve('denied'); };
+        try { window.Notification = Notif; } catch (e) {}
+      }
+
       function post(m) {
         try { return window.webkit.messageHandlers.webextBridge.postMessage(m); }
         catch (e) { return Promise.reject(e); }
+      }
+      // Structured-clone-safe copy of a storage payload. postMessage uses
+      // WKWebView's structured clone, which throws DataCloneError on functions,
+      // symbols, or class instances. The storage layer JSON-encodes every value
+      // anyway (ExtStorage.encode), so JSON round-tripping is lossless for what
+      // can actually persist and strips anything that would otherwise throw.
+      function cloneForStorage(items) {
+        try { return JSON.parse(JSON.stringify(items === undefined ? null : items)); }
+        catch (e) { return items; }
+      }
+      // Surface a diagnostic on the existing kind:'diag' relay path. Never
+      // throws, so it is safe to call from a promise rejection handler.
+      function diag(o) {
+        try {
+          var m = { kind: 'diag' };
+          for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) m[k] = o[k];
+          window.webkit.messageHandlers.webextBridge.postMessage(m);
+        } catch (e) {}
       }
       // ReTorn uses callback style; we also return the promise.
       function cbWrap(promise, cb) {
@@ -85,7 +117,23 @@ enum WebExtShimJS {
       function storageArea(area) {
         return {
           get: function (keys, cb) { return cbWrap(post({ kind: 'storage', area: area, op: 'get', keys: keys === undefined ? null : keys }), cb); },
-          set: function (obj, cb) { return cbWrap(post({ kind: 'storage', area: area, op: 'set', items: obj }), cb); },
+          set: function (obj, cb) {
+            var items = cloneForStorage(obj);
+            // Breadcrumb the seed write so the next build is conclusive: this
+            // fires the instant set() is reached (proving getDefaultStorage did
+            // NOT throw), pairs with the relay's own webext-storage-set receive
+            // log, and shows the post-sanitize key count.
+            if (items && items.settings !== undefined) {
+              diag({ tag: 'webext-storage-setcall', area: area, n: Object.keys(items).length });
+            }
+            var p = post({ kind: 'storage', area: area, op: 'set', items: items });
+            p.catch(function (e) {
+              diag({ tag: 'webext-storage-seterr', area: area,
+                     keys: Object.keys(items || {}),
+                     err: String((e && e.message) || e) });
+            });
+            return cbWrap(p, cb);
+          },
           remove: function (keys, cb) { return cbWrap(post({ kind: 'storage', area: area, op: 'remove', keys: keys }), cb); },
           clear: function (cb) { return cbWrap(post({ kind: 'storage', area: area, op: 'clear' }), cb); },
           onChanged: event('storageChanged')
