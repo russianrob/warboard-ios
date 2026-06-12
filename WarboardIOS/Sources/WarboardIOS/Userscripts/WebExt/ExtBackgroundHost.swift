@@ -159,6 +159,19 @@ final class ExtBackgroundHost: NSObject, WKNavigationDelegate {
         }
     }
 
+    /// Emit `runtime.alarms.onAlarm` for `name` into the bg world. Driven by
+    /// `ExtMessageRelay`'s per-alarm timers — this is the extension's recurring
+    /// trigger (e.g. TornTools' data-update alarm → `timedUpdates()` →
+    /// `updateUserdata()`). A nil web view (bg torn down) is a safe no-op.
+    func fireAlarm(name: String) {
+        Task { @MainActor [weak self] in
+            guard let self, let wv = self.webView else { return }
+            _ = try? await wv.callAsyncJavaScript(
+                "window.__webext_emit && window.__webext_emit('alarm', { name: n });",
+                arguments: ["n": name], in: nil, contentWorld: .page)
+        }
+    }
+
     // MARK: - helpers
 
     private func waitReady() async {

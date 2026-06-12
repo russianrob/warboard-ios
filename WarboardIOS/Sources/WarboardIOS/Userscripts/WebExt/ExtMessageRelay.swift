@@ -19,6 +19,13 @@ final class ExtMessageRelay: NSObject, WKScriptMessageHandlerWithReply {
     /// extension page (e.g. "options") in a sheet.
     var onOpenExtPage: ((String) -> Void)?
 
+    /// `browser.alarms` backing: a repeating timer per alarm name whose tick
+    /// fires `onAlarm` into the bg world (the extension's only recurring trigger,
+    /// e.g. TornTools' data-update alarm → userdata refresh). `alarmInfo` mirrors
+    /// the registrations so `get`/`getAll` can answer.
+    private var alarmTimers: [String: Timer] = [:]
+    private var alarmInfo: [String: [String: Any]] = [:]
+
     init(storage: ExtStorage) {
         self.storage = storage
         super.init()
@@ -72,13 +79,7 @@ final class ExtMessageRelay: NSObject, WKScriptMessageHandlerWithReply {
             WebDiag.log("webext-content-diag", body)
             replyHandler(nil, nil)
         case "alarms":
-            // Phase-1 stub: `get` returns a scheduledTime so popup timing code
-            // doesn't break; create/clear are no-ops until Phase 3.
-            if (body["op"] as? String) == "get" {
-                replyHandler(["scheduledTime": Date().timeIntervalSince1970 * 1000], nil)
-            } else {
-                replyHandler(nil, nil)
-            }
+            handleAlarms(body, replyHandler)
         case "notifications", "action":
             replyHandler(nil, nil) // Phase 3
         default:
@@ -134,6 +135,54 @@ final class ExtMessageRelay: NSObject, WKScriptMessageHandlerWithReply {
         }
     }
 
+    /// Real `browser.alarms`. `create` schedules a repeating timer (sub-minute
+    /// allowed; 5s floor) whose tick fires `onAlarm` into the bg world via the
+    /// background host. The extension re-arms its alarms on each bg boot (its
+    /// own onInitialisation/resetAlarms → clearAll + create), so the registry
+    /// self-heals; a tick into a torn-down webview is a safe no-op (fireAlarm
+    /// guards a nil web view).
+    private func handleAlarms(_ body: [String: Any], _ reply: @escaping (Any?, String?) -> Void) {
+        switch body["op"] as? String {
+        case "create":
+            guard let name = body["name"] as? String else { reply(nil, nil); return }
+            let info = body["info"] as? [String: Any] ?? [:]
+            let period = Self.minutes(info["periodInMinutes"])
+            let delay = Self.minutes(info["delayInMinutes"])
+            alarmTimers[name]?.invalidate()
+            let now = Date().timeIntervalSince1970 * 1000
+            alarmInfo[name] = ["name": name, "periodInMinutes": period,
+                               "scheduledTime": now + max(delay, period) * 60_000]
+            if period > 0 {
+                let t = Timer.scheduledTimer(withTimeInterval: max(period * 60, 5), repeats: true) { [weak self] _ in
+                    self?.backgroundHost?.fireAlarm(name: name)
+                }
+                alarmTimers[name] = t
+            }
+            reply(nil, nil)
+        case "clear":
+            if let name = body["name"] as? String {
+                alarmTimers[name]?.invalidate(); alarmTimers[name] = nil; alarmInfo[name] = nil
+            }
+            reply(true, nil)
+        case "clearAll":
+            alarmTimers.values.forEach { $0.invalidate() }
+            alarmTimers.removeAll(); alarmInfo.removeAll()
+            reply(true, nil)
+        case "get":
+            reply((body["name"] as? String).flatMap { alarmInfo[$0] } as Any, nil)
+        case "getAll":
+            reply(Array(alarmInfo.values), nil)
+        default:
+            reply(nil, nil)
+        }
+    }
+
+    private static func minutes(_ v: Any?) -> Double {
+        if let d = v as? Double { return d }
+        if let i = v as? Int { return Double(i) }
+        return 0
+    }
+
     private func handleApiFetch(_ body: [String: Any], _ reply: @escaping (Any?, String?) -> Void) {
         guard let urlStr = body["url"] as? String, let url = URL(string: urlStr) else {
             reply(nil, "bad apiFetch url"); return
@@ -147,6 +196,10 @@ final class ExtMessageRelay: NSObject, WKScriptMessageHandlerWithReply {
             let text = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
             DispatchQueue.main.async {
                 ExtCrashDiag.breadcrumb("apiFetch:reply:\(status)")
+                if url.host?.contains("api.torn.com") == true {
+                    WebDiag.log("webext-apifetch", ["host": url.host ?? "", "status": status,
+                                                    "len": text.count, "head": String(text.prefix(160))])
+                }
                 reply(["status": status, "ok": (200..<300).contains(status), "body": text], nil)
             }
         }.resume()

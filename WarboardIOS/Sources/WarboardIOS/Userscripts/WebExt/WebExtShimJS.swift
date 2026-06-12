@@ -174,7 +174,7 @@ enum WebExtShimJS {
           get: function (name, cb) { return cbWrap(post({ kind: 'alarms', op: 'get', name: name }), cb); },
           clear: function (name, cb) { return cbWrap(post({ kind: 'alarms', op: 'clear', name: name }), cb); },
           clearAll: function (cb) { return cbWrap(post({ kind: 'alarms', op: 'clearAll' }), cb); },
-          getAll: function (cb) { return cbWrap(Promise.resolve([]), cb); },
+          getAll: function (cb) { return cbWrap(post({ kind: 'alarms', op: 'getAll' }), cb); },
           onAlarm: event('alarm')
         },
         notifications: {
