@@ -11,12 +11,14 @@ final class ExtBackgroundHost: NSObject, WKNavigationDelegate {
     private var webView: WKWebView?
     private let relay: ExtMessageRelay
     private let version: String
+    private let storage: ExtStorage
     private var isReady = false
     private var readyWaiters: [CheckedContinuation<Void, Never>] = []
 
-    init(relay: ExtMessageRelay, version: String) {
+    init(relay: ExtMessageRelay, version: String, storage: ExtStorage) {
         self.relay = relay
         self.version = version
+        self.storage = storage
         super.init()
     }
 
@@ -73,6 +75,32 @@ final class ExtBackgroundHost: NSObject, WKNavigationDelegate {
         let waiters = readyWaiters
         readyWaiters.removeAll()
         for w in waiters { w.resume() }
+        maybeFireInstalled()
+    }
+
+    /// Fire ReTorn's `onInstalled` on first run / version change so its
+    /// `newInstallation()` seeds default settings + features into storage.
+    /// Without this the `features` object is never populated and every ReTorn
+    /// feature silently no-ops (`features?.pages...enabled` is undefined).
+    private func maybeFireInstalled() {
+        let stored = storage.storedVersion
+        var details: [String: Any] = [:]
+        if stored == nil {
+            details["reason"] = "install"
+        } else if stored != version {
+            details["reason"] = "update"
+            details["previousVersion"] = stored!
+        } else {
+            return
+        }
+        storage.storedVersion = version
+        ExtCrashDiag.breadcrumb("fireInstalled:\((details["reason"] as? String) ?? "")")
+        Task { @MainActor [weak self] in
+            guard let wv = self?.webView else { return }
+            _ = try? await wv.callAsyncJavaScript(
+                "window.__webext_fireInstalled(d);",
+                arguments: ["d": details], in: nil, contentWorld: .page)
+        }
     }
 
     // MARK: - helpers

@@ -27,7 +27,7 @@ final class ExtensionRuntime {
         manifest = loaded
         relay = ExtMessageRelay(storage: storage)
         if let loaded = loaded {
-            let host = ExtBackgroundHost(relay: relay, version: loaded.version)
+            let host = ExtBackgroundHost(relay: relay, version: loaded.version, storage: storage)
             backgroundHost = host
             relay.backgroundHost = host
         } else {

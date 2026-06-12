@@ -28,7 +28,7 @@ enum WebExtShimJS {
       }
 
       // ---- event registry (native -> JS via window.__webext_emit) ----
-      var listeners = { message: [], storageChanged: [], alarm: [], notifClicked: [] };
+      var listeners = { message: [], storageChanged: [], alarm: [], notifClicked: [], installed: [] };
       function event(bucket) {
         return {
           addListener: function (fn) { if (typeof fn === 'function') listeners[bucket].push(fn); },
@@ -39,6 +39,13 @@ enum WebExtShimJS {
       window.__webext_emit = function (type, a, b, c) {
         var arr = listeners[type] || [];
         for (var i = 0; i < arr.length; i++) { try { arr[i](a, b, c); } catch (e) {} }
+      };
+
+      // Native fires this once on first run / version change so the background's
+      // onInstalled handler seeds default settings+features into storage.
+      window.__webext_fireInstalled = function (details) {
+        var arr = listeners.installed;
+        for (var i = 0; i < arr.length; i++) { try { arr[i](details); } catch (e) {} }
       };
 
       // Background host: run onMessage listeners for a relayed message and
@@ -75,7 +82,7 @@ enum WebExtShimJS {
           lastError: null,
           sendMessage: function (msg, cb) { return cbWrap(post({ kind: 'sendMessage', message: msg }), cb); },
           onMessage: event('message'),
-          onInstalled: { addListener: function () {} },
+          onInstalled: event('installed'),
           onStartup: { addListener: function () {} },
           connect: function () { return { onMessage: { addListener: function () {} }, postMessage: function () {}, disconnect: function () {} }; },
           getURL: function (p) { return 'webext://retorn/' + String(p || '').replace(/^\//, ''); },
