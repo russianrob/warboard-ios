@@ -180,8 +180,16 @@ final class GMBridge: NSObject, WKScriptMessageHandlerWithReply {
         guard let urlStr = payload["url"] as? String, let url = URL(string: urlStr) else {
             replyHandler(nil, "invalid url"); return
         }
-        let policy = ConnectPolicy(connects: ctx.connects,
-                                   wildcardConnectGranted: ctx.wildcardConnectGranted)
+        // The single shared bootstrap attributes EVERY page script's GM calls to
+        // the FIRST matched script's id, so `ctx.connects` is only that one
+        // script's @connect list — a request from a later-loaded script (e.g. FFS
+        // → ffscouter.com) would be checked against the wrong allowlist and
+        // blocked. Decide against the UNION of all active scripts' @connect lists;
+        // they are all the user's own installed scripts.
+        let unionConnects = Array(Set(activeScripts.values.flatMap { $0.connects }))
+        let anyWildcard = activeScripts.values.contains { $0.wildcardConnectGranted }
+        let policy = ConnectPolicy(connects: unionConnects,
+                                   wildcardConnectGranted: anyWildcard)
         switch policy.decision(forURL: url) {
         case .blocked:
             replyHandler(nil, "blocked by @connect: \(url.host ?? "?")")

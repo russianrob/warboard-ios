@@ -1,5 +1,8 @@
 import Foundation
 import WebKit
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// Owns the WKWebView configuration and rebuilds the injected user-script set
 /// on every navigation (Approach 1). Pure ordering/selection is delegated to
@@ -437,4 +440,56 @@ extension UserscriptController: WKUIDelegate {
         }
         return nil
     }
+
+    #if canImport(UIKit)
+    // WKWebView shows NO JS dialogs unless the UI delegate handles them, so a
+    // script's alert()/confirm()/prompt() (e.g. FFS's "click to add" limited-key
+    // prompt) silently no-ops. Present native UIAlertControllers like PDA does.
+    func webView(_ webView: WKWebView,
+                 runJavaScriptAlertPanelWithMessage message: String,
+                 initiatedByFrame frame: WKFrameInfo,
+                 completionHandler: @escaping () -> Void) {
+        guard let vc = Self.wbTopViewController() else { completionHandler(); return }
+        let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler() })
+        vc.present(alert, animated: true)
+    }
+
+    func webView(_ webView: WKWebView,
+                 runJavaScriptConfirmPanelWithMessage message: String,
+                 initiatedByFrame frame: WKFrameInfo,
+                 completionHandler: @escaping (Bool) -> Void) {
+        guard let vc = Self.wbTopViewController() else { completionHandler(false); return }
+        let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in completionHandler(false) })
+        alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler(true) })
+        vc.present(alert, animated: true)
+    }
+
+    func webView(_ webView: WKWebView,
+                 runJavaScriptTextInputPanelWithPrompt prompt: String,
+                 defaultText: String?,
+                 initiatedByFrame frame: WKFrameInfo,
+                 completionHandler: @escaping (String?) -> Void) {
+        guard let vc = Self.wbTopViewController() else { completionHandler(nil); return }
+        let alert = UIAlertController(title: nil, message: prompt, preferredStyle: .alert)
+        alert.addTextField { $0.text = defaultText }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in completionHandler(nil) })
+        alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
+            completionHandler(alert.textFields?.first?.text)
+        })
+        vc.present(alert, animated: true)
+    }
+
+    /// Topmost presented view controller of the key window, to present alerts from.
+    private static func wbTopViewController() -> UIViewController? {
+        let windows = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+        let keyWindow = windows.first { $0.isKeyWindow } ?? windows.first
+        var top = keyWindow?.rootViewController
+        while let presented = top?.presentedViewController { top = presented }
+        return top
+    }
+    #endif
 }
