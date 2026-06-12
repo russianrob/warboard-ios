@@ -199,6 +199,9 @@ public struct BrowserView: View {
     private let onShowWarRoom: (() -> Void)?
     /// Opens the app's native OC Manager (same framework→app closure pattern).
     private let onShowOCManager: (() -> Void)?
+    /// Presents ReTorn's options page in a sheet. The ⋯ menu item and the
+    /// in-page "Options" button (runtime.openOptionsPage) both route here.
+    private let onShowExtOptions: (() -> Void)?
     /// Two quick-item lists (persisted/edited by the app target): `personalItems`
     /// for the Items page, `factionItems` for the faction armoury.
     /// `onEditQuickItems` opens the app's picker for the relevant list — its Bool
@@ -211,13 +214,15 @@ public struct BrowserView: View {
                 onEditQuickItems: ((Bool) -> Void)? = nil,
                 onShowNotifications: (() -> Void)? = nil,
                 onShowWarRoom: (() -> Void)? = nil,
-                onShowOCManager: (() -> Void)? = nil) {
+                onShowOCManager: (() -> Void)? = nil,
+                onShowExtOptions: (() -> Void)? = nil) {
         self.personalItems = personalItems
         self.factionItems = factionItems
         self.onEditQuickItems = onEditQuickItems
         self.onShowNotifications = onShowNotifications
         self.onShowWarRoom = onShowWarRoom
         self.onShowOCManager = onShowOCManager
+        self.onShowExtOptions = onShowExtOptions
     }
     @StateObject private var model = BrowserModel()
     @State private var showScripts = false
@@ -277,6 +282,11 @@ public struct BrowserView: View {
                 .receive(on: RunLoop.main)
         ) { _ in
             model.reload()
+        }
+        .onAppear {
+            // Route ReTorn's in-page "Options" button (runtime.openOptionsPage →
+            // openExtPage) to the same sheet the ⋯ menu opens.
+            ExtensionRuntime.shared.onOpenExtPage = { _ in onShowExtOptions?() }
         }
     }
 
@@ -361,6 +371,11 @@ public struct BrowserView: View {
                 Button { controller.toggleDevTools() } label: {
                     Label(controller.devToolsEnabled ? "Dev Tools: On" : "Dev Tools",
                           systemImage: controller.devToolsEnabled ? "ladybug.fill" : "ladybug")
+                }
+                if let onShowExtOptions {
+                    Button { onShowExtOptions() } label: {
+                        Label("ReTorn Options…", systemImage: "puzzlepiece.extension")
+                    }
                 }
                 Divider()
                 if controller.menuCommands.isEmpty {

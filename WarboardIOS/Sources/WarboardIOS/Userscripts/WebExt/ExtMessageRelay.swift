@@ -15,6 +15,9 @@ final class ExtMessageRelay: NSObject, WKScriptMessageHandlerWithReply {
     weak var backgroundHost: ExtBackgroundHost?
     /// tabs.create → ask the app to open a URL in the browser.
     var onOpenURL: ((String) -> Void)?
+    /// runtime.openOptionsPage / action popup → ask the app to present an
+    /// extension page (e.g. "options") in a sheet.
+    var onOpenExtPage: ((String) -> Void)?
 
     init(storage: ExtStorage) {
         self.storage = storage
@@ -51,6 +54,9 @@ final class ExtMessageRelay: NSObject, WKScriptMessageHandlerWithReply {
                let url = props["url"] as? String {
                 onOpenURL?(url)
             }
+            replyHandler(nil, nil)
+        case "openExtPage":
+            onOpenExtPage?((body["page"] as? String) ?? "options")
             replyHandler(nil, nil)
         case "alarms":
             // Phase-1 stub: `get` returns a scheduledTime so popup timing code

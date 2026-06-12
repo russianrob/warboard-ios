@@ -86,7 +86,8 @@ enum WebExtShimJS {
           onStartup: { addListener: function () {} },
           connect: function () { return { onMessage: { addListener: function () {} }, postMessage: function () {}, disconnect: function () {} }; },
           getURL: function (p) { return 'webext://retorn/' + String(p || '').replace(/^\//, ''); },
-          getManifest: function () { return { manifest_version: 3, version: (window.__webext_version || '0') }; }
+          getManifest: function () { return { manifest_version: 3, version: (window.__webext_version || '0') }; },
+          openOptionsPage: function (cb) { post({ kind: 'openExtPage', page: 'options' }); if (typeof cb === 'function') cb(); }
         },
         storage: {
           local: storageArea('local'),

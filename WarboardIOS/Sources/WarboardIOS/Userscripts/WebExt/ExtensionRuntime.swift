@@ -21,6 +21,28 @@ final class ExtensionRuntime {
         set { relay.onOpenURL = newValue }
     }
 
+    /// `runtime.openOptionsPage` (the in-page "Options" button) → present an
+    /// extension page in a sheet. Set by the app (ContentView).
+    var onOpenExtPage: ((String) -> Void)? {
+        get { relay.onOpenExtPage }
+        set { relay.onOpenExtPage = newValue }
+    }
+
+    /// A WKWebView config for rendering a visible extension page (options /
+    /// popup): the webext:// scheme handler + the shared relay (so the page's
+    /// `browser.storage`/`sendMessage` hit the same storage + background host)
+    /// + the shim and a jscolor stub injected at document-start in the page world.
+    func makeExtensionPageConfig() -> WKWebViewConfiguration {
+        let config = WKWebViewConfiguration()
+        config.setURLSchemeHandler(ExtResourceScheme(), forURLScheme: ExtResourceScheme.scheme)
+        relay.register(on: config.userContentController, world: .page)
+        let version = manifest?.version ?? "0"
+        let source = "window.__webext_version='\(version)';" + WebExtShimJS.source + ExtPageExtrasJS.source
+        config.userContentController.addUserScript(
+            WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        return config
+    }
+
     private init() {
         ExtCrashDiag.install()
         let loaded = ExtManifest.loadReTorn()
