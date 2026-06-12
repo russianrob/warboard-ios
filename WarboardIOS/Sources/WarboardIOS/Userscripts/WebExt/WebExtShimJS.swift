@@ -28,7 +28,7 @@ enum WebExtShimJS {
       }
 
       // ---- event registry (native -> JS via window.__webext_emit) ----
-      var listeners = { message: [], storageChanged: [], alarm: [], notifClicked: [], installed: [] };
+      var listeners = { message: [], storageChanged: [], alarm: [], notifClicked: [], installed: [], startup: [] };
       function event(bucket) {
         return {
           addListener: function (fn) { if (typeof fn === 'function') listeners[bucket].push(fn); },
@@ -46,6 +46,14 @@ enum WebExtShimJS {
       window.__webext_fireInstalled = function (details) {
         var arr = listeners.installed;
         for (var i = 0; i < arr.length; i++) { try { arr[i](details); } catch (e) {} }
+      };
+
+      // Native fires this on every background boot so the extension's onStartup
+      // handler runs its startup migration/seed (independent of the one-time
+      // onInstalled event, which is missed if the bg aborted before registering it).
+      window.__webext_fireStartup = function () {
+        var arr = listeners.startup;
+        for (var i = 0; i < arr.length; i++) { try { arr[i](); } catch (e) {} }
       };
 
       // Health probe (native diagnostics): how many onMessage listeners registered.
@@ -86,7 +94,7 @@ enum WebExtShimJS {
           sendMessage: function (msg, cb) { return cbWrap(post({ kind: 'sendMessage', message: msg }), cb); },
           onMessage: event('message'),
           onInstalled: event('installed'),
-          onStartup: { addListener: function () {} },
+          onStartup: event('startup'),
           connect: function () { return { onMessage: { addListener: function () {} }, postMessage: function () {}, disconnect: function () {} }; },
           getURL: function (p) { return 'webext://' + (window.__webext_id || 'retorn') + '/' + String(p || '').replace(/^\//, ''); },
           getManifest: function () { return { manifest_version: 3, version: (window.__webext_version || '0') }; },

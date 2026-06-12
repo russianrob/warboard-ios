@@ -84,6 +84,7 @@ final class ExtBackgroundHost: NSObject, WKNavigationDelegate {
         readyWaiters.removeAll()
         for w in waiters { w.resume() }
         maybeFireInstalled()
+        fireStartup()
         logHealth(webView)
     }
 
@@ -140,6 +141,21 @@ final class ExtBackgroundHost: NSObject, WKNavigationDelegate {
             _ = try? await wv.callAsyncJavaScript(
                 "window.__webext_fireInstalled(d);",
                 arguments: ["d": details], in: nil, contentWorld: .page)
+        }
+    }
+
+    /// Fire `runtime.onStartup` on EVERY background boot. wxt extensions
+    /// (TornTools) run their storage migration/seed from `onStartup` →
+    /// `migrateDatabase()` → seeds defaults when storage is empty. This is the
+    /// robust seed path: unlike the one-time `onInstalled`, it can't be burned
+    /// by a prior boot that aborted before registering the install listener.
+    private func fireStartup() {
+        WebDiag.log("webext-fire-startup", ["id": id])
+        Task { @MainActor [weak self] in
+            guard let wv = self?.webView else { return }
+            _ = try? await wv.callAsyncJavaScript(
+                "window.__webext_fireStartup && window.__webext_fireStartup();",
+                arguments: [:], in: nil, contentWorld: .page)
         }
     }
 

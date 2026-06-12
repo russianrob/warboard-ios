@@ -106,7 +106,7 @@ final class ExtInstance {
           if (window.__wbdiag) return; window.__wbdiag = 1;
           function p(o){ try{ window.webkit.messageHandlers.webextBridge.postMessage(Object.assign({kind:'diag',ext:'\(id)'},o)); }catch(e){} }
           window.__wbdiagPost = p;
-          p({stage:'setup'});
+          p({stage:'setup', ver:(window.__webext_version||'?')});
           window.addEventListener('error', function(e){ p({stage:'onerror', msg:String(e.message||'')+' @ '+String(e.filename||'').split('/').pop()+':'+(e.lineno||0)+':'+(e.colno||0)}); }, true);
           window.addEventListener('unhandledrejection', function(e){ var r=e&&e.reason; p({stage:'rejection', msg:String((r&&r.message)||r||'').slice(0,200)}); });
         })();
