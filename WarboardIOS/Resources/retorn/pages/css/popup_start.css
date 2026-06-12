@@ -1,0 +1,20 @@
+html {
+    background-color: var(--re-background);
+}
+
+body {
+    text-align: center;
+    margin: 10px;
+    width: 288px;
+}
+
+.title {
+    font-size: 1.5em;
+    font-weight: bold;
+}
+
+div.buttons {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+}

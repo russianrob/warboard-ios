@@ -1,0 +1,383 @@
+/* highlight items */
+.re_ct_items .items-layer .ct-item.re_item::before {
+  content: "";
+  display: block;
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  animation: glow 1.5s ease-out infinite alternate;
+}
+
+
+/* highlight chests */
+.re_ct_chests .items-layer .ct-item.re_chest::before {
+  content: "";
+  display: block;
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  box-shadow: 0 0 0 50px rgba(193, 138, 239, 0.5);
+}
+
+/* highlight npcs */
+.re_ct_npcs .users-layer .ct-user.npc::before {
+  content: '';
+  display: block;
+  position: absolute;
+  background: radial-gradient(#24242400 0%, #24242480 100%);
+  border-radius: 50%;
+  width: 70px;
+  height: 70px;
+  left: -26px;
+  top: -19px;
+}
+
+/* hide footsteps */
+.re_ct_footsteps .steps-layer * {
+  display: none;
+}
+
+/* hide snow and/or grid */
+.d .re_ct_snow .substrate-layer {
+  background: url(https://www.torn.com/images/v2/christmas_town/map_grid.png) 0 0 repeat;
+}
+.d .re_ct_grid .substrate-layer {
+  background: url(https://www.torn.com/images/v2/christmas_town/snow.jpg) 0 0 repeat;
+}
+.d .re_ct_snow.re_ct_grid .substrate-layer {
+  background: unset;
+}
+
+/* hide HUD */
+.d #ct-wrap.re_ct_hud .user-map-container .user-map::before {
+  background: unset;
+}
+.re_ct_hud .map-directions {
+  display: none;
+}
+
+/* hide players (not friends) */
+.re_ct_players .users-layer .ct-user:not(.npc):not(.re_self):not(.re_friend) {
+  display: none !important;
+}
+
+
+/* animation for highlighting items */
+@keyframes glow {
+  0%{
+		box-shadow: 0 0 0 0 rgba(138, 190, 239, 0);
+  }
+  to {
+    box-shadow: 0 0 0 50px rgba(138, 190, 239, .5);
+  }
+}
+
+
+/* hide wreath for christmas wreath mini game */
+.re_ct_wreath [class^="christmas-wreath"] [class^="wreath"] > img[alt="christmas wreath"] {
+  opacity: 10%;
+}
+
+/* hide santas, easy grinch */
+.re_ct_snowshooter [class^="moving-block"] [style*="data:image/png;base64"] {
+  left: -200px !important;
+}
+.re_ct_snowshooter [class^="moving-block"] [style*="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAA44AAABcCAYAAAAh6estAAAgAElEQVR4Xuy9eZBd1Z3n+TvLXd7+8uW+KJWbFiQwAgQI"], .re_ct_snowshooter [class^="moving-block"] [style*="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAq4AAABbCAYAAACyPweFAAAgAElEQVR4Xuy9eXBdx5XmeTLzrm8F3sNKgiBIgvsmidpI"], .re_ct_snowshooter [class^="moving-block"] [style*="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABG4AAABcCAYAAAA/MPPfAAAgAElEQVR4Xuy9CZCdV3bfd+7ybW/t13sDaKABY"], .re_ct_snowshooter [class^="moving-block"] [style*="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAA4AAAABbCAYAAAAiJesmAAAgAElEQVR4Xuy9d7Bd15XeuXY44ebwckDOAAEmUBRBMICUR"], .re_ct_snowshooter [class^="moving-block"] [style*="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAApIAAABbCAYAAADA8GUzAAAgAElEQVR4Xuy9B5Cd13XneW740gv9+nVuoJEjARAMAME"], .re_ct_snowshooter [class^="moving-block"] [style*="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAA7gAAABbCAYAAABZASnqAAAgAElEQVR4Xuy9CXCdV3bnd+693/7294CHHSTAfSdFaqcWqq"] {
+  left: 300px !important;
+  opacity: 1 !important;
+}
+
+/* santa clawz  */
+.re_ct_santaclaws [class^="ctMiniGameWrapper"] [class^="cell"] img[src*="iVBORw0K"] {
+  opacity: 0.1;
+}
+
+.re_ct_santaclaws [class^="ctMiniGameWrapper"] [class^="cell"] img[src*="VBMVEUAAABQTGmzpq+lbH/n6u7s7vK6ssC+t8OTRG3h4+rc2+PCuMPl5"], .re_ct_santaclaws [class^="ctMiniGameWrapper"] [class^="cell"] img[src*="VBMVEUAAAC4tMJxaYONi56XjaSin6+no7S3s8BOQWK3tMCVj6NXRmafma"], .re_ct_santaclaws [class^="ctMiniGameWrapper"] [class^="cell"] img[src*="AFBMVEUAAAClhYu4lZmdgIedf4i3hoqseoKUf4XBY3/GtbSLdX3j2tehl6CvnaGhh"], .re_ct_santaclaws [class^="ctMiniGameWrapper"] [class^="cell"] img[src*="FBMVEUAAACQcYLa2de5mJibe4Tp1LyneoTu6eRGYGbJpaCXVXDh0cqyeoXq4t2XcH/5"], .re_ct_santaclaws [class^="ctMiniGameWrapper"] [class^="cell"] img[src*="VEUAAACdm7GEfpi7utOMiKK1ssa4tsiYlqy1ssasqMDU0N2qqLx2b4ysp8DAv9BmW3qemrGzr8"], .re_ct_santaclaws [class^="ctMiniGameWrapper"] [class^="cell"] img[src*="BMVEUAAADBspy4hIi1iYJjWm+3loRxW2zBZotnU2a8m4i3T4C4XX63WX/Ov6/CXYy4oIHBV"], .re_ct_santaclaws [class^="ctMiniGameWrapper"] [class^="cell"] img[src*="VBMVEUAAACQfpGlnqpsW3WFbYaon6uclKGQZYLQxs1EO1ydUHi1rra7tb1NQWBlU25URGOcUnl"], .re_ct_santaclaws [class^="ctMiniGameWrapper"] [class^="cell"] img[src*="AFBMVEUAAADaycvb09Xg19isbHqxpKa+rrDs6erSyMjj3N+5Znfk3N6+t7zWzM+1rK/q5efg"], .re_ct_santaclaws [class^="ctMiniGameWrapper"] [class^="cell"] img[src*="VBMVEUAAADGvcO+sLfKwcXPyMy5sbjSy866c4KklJ2hiZTBuL7b1tnSysvc19q0qa62qa+JhZG2q7LEvM"], .re_ct_santaclaws [class^="ctMiniGameWrapper"] [class^="cell"] img[src*="4+GW3rq7fPo6/GrW4uaU37Z2uCnU4Tk5e3r7vTj5ezr7vXGwsmTTXijWIeVUnvKxs6vgKRsWn"], .re_ct_santaclaws [class^="ctMiniGameWrapper"] [class^="cell"] img[src*="xruskIa/ZIfIu6/FZIqbgIO9VIXVgKTn4uW+WYfHZZm+rJOsk5HCsJyWen5sWm3BUYnj3uDd087Pw7qTdnzn5"] {
+  opacity: 1 !important;
+}
+
+
+/* Minigame Cheat Wrap */
+.re_minigame_cheatwrap {
+  width: auto;
+  height: auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #fff;
+  box-sizing: border-box;
+  border-radius: 5px;
+  margin-top: 10px;
+  padding: 10px;
+}
+body.dark-mode .re_minigame_cheatwrap {
+  background-color: #333;
+}
+
+#re_wordFixer {
+  font-size: 14px;
+}
+
+/* items overlay */
+.re_ct_items_overlay .re_item_overlay_box {
+  display: block;
+}
+
+.re_item_overlay_box {
+    display: none;
+    max-width: 145px;
+    padding: 3px;
+    position: relative;
+    z-index: 99998;
+    float: right;
+    box-shadow: rgb(95 94 94 / 75%) 0px 0px 0px 40px inset;
+    max-height: 50px;
+    overflow: hidden;
+}
+
+.re_no_shadow {
+    box-shadow: none;
+}
+
+#re_item_overlay_text {
+  font: 10px monospace;
+  color: #fff;
+  z-index: 99999;
+  position: relative;
+  float: right;
+}
+
+
+
+/* Show Walls/Boundaries */
+.re_ct_walls #re_walls {
+  position: absolute;
+  height: 30px;
+  width: 30px;
+  z-index: 10000;
+  box-sizing: border-box;
+  border: 2px solid transparent;
+}
+#re_walls > div{
+  background: #ff00f9;
+  box-sizing: border-box;
+  position: absolute;
+}
+
+
+
+
+.top .top {
+  height: 2px;
+  top: -2px;
+  width: 20px;
+  left: 3px;
+}
+.top.leftTop .top {
+  width: 25px;
+  left: -2px;
+}
+.top.rightTop .top {
+  width: 25px;
+  left: 3px;
+}
+.top.leftTop.rightTop .top {
+  width: 30px;
+  left: -2px;
+}
+.top.leftTop .lefttop {
+  width: 2px;
+  height: 5px;
+  left: -2px;
+  top: -2px;
+}
+.top.rightTop .righttop {
+  width: 2px;
+  height: 5px;
+  left: 26px;
+  top: -2px;
+}
+
+
+
+#re_walls.bottom .bottom {
+  height: 2px;
+  top: 26px;
+  width: 20px;
+  left: 3px;
+}
+#re_walls.bottom.leftBottom .bottom {
+  width: 25px;
+  left: -2px;
+}
+#re_walls.bottom.rightBottom .bottom {
+  width: 25px;
+  left: 3px;
+}
+#re_walls.bottom.leftBottom.rightBottom .bottom {
+  width: 30px;
+  left: -2px;
+}
+#re_walls.bottom.leftBottom .leftbottom {
+  width: 2px;
+  height: 5px;
+  left: -2px;
+  top: 23px;
+}
+#re_walls.bottom.rightBottom .rightbottom {
+  width: 2px;
+  height: 5px;
+  left: 26px;
+  top: 23px;
+}
+
+
+
+#re_walls.left .left {
+  width: 2px;
+  left: -2px;
+  height: 20px;
+  top: 3px;
+}
+#re_walls.left.leftTop .left {
+  height: 25px;
+  top: -2px;
+}
+#re_walls.left.leftBottom .left {
+  height: 25px;
+  top: 3px;
+}
+#re_walls.left.leftTop.leftBottom .left {
+  height: 30px;
+  top: -2px;
+}
+#re_walls.left.leftTop .lefttop {
+  width: 5px;
+  height: 2px;
+  left: -2px;
+  top: -2px;
+}
+#re_walls.left.leftBottom .leftbottom {
+  width: 5px;
+  height: 2px;
+  left: -2px;
+  top: 26px;
+}
+
+
+
+
+#re_walls.right .right {
+  width: 2px;
+  left: 26px;
+  height: 20px;
+  top: 3px;
+}
+#re_walls.right.rightTop .right {
+  height: 25px;
+  top: -2px;
+}
+#re_walls.right.rightBottom .right {
+  height: 25px;
+  top: 3px;
+}
+#re_walls.right.rightTop.rightBottom .right {
+  height: 30px;
+  top: -2px;
+}
+#re_walls.right.rightTop .righttop {
+  width: 5px;
+  height: 2px;
+  left: 23px;
+  top: -2px;
+}
+#re_walls.right.rightBottom .rightbottom {
+  width: 5px;
+  height: 2px;
+  left: 23px;
+  top: 26px;
+}
+
+#re_walls.rightTop .righttop {
+  height: 5px;
+  width: 2px;
+  left: 26px;
+  top: -2px;
+}
+#re_walls.rightTop .righttop2 {
+  width: 5px;
+  height: 2px;
+  top: -2px;
+  left: 23px;
+}
+
+#re_walls.leftTop .lefttop {
+  height: 5px;
+  width: 2px;
+  left: -2px;
+  top: -2px;
+}
+#re_walls.leftTop .lefttop2 {
+  width: 5px;
+  height: 2px;
+  top: -2px;
+  left: -2px;
+}
+
+
+#re_walls.rightBottom .rightbottom {
+  height: 5px;
+  width: 2px;
+  left: 26px;
+  top: 23px;
+}
+#re_walls.rightBottom .rightbottom2 {
+  width: 5px;
+  height: 2px;
+  top: 26px;
+  left: 23px;
+}
+
+#re_walls.leftBottom .leftbottom {
+  height: 5px;
+  width: 2px;
+  left: -2px;
+  top: 23px;
+}
+#re_walls.leftBottom .leftbottom2 {
+  width: 5px;
+  height: 2px;
+  top: 26px;
+  left: -2px;
+}
+
+
+/* CSS for container and stuff */
+
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+  opacity: 0;
+}
+
+#re_ct_friendsTextbox {
+  width: 100%;
+}
+
+.re_row#re_ct_main {
+  justify-content: start;
+}
+
+.switch_wrap {
+  margin-right: auto;
+  width: 164px;
+  max-width: 164px;
+}
+
+@media screen and (max-width: 600px) {
+  .switch_wrap {
+    width: 144px;
+    max-width: 144px;
+  }
+}

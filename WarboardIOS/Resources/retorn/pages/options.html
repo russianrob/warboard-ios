@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en" lang="en" class="dark">
+  <head>
+    <title>Options - ReTorn</title>
+    <link rel="icon" href="/images/ReTorn@Default.png">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <link rel="stylesheet" href="css/colors.css">
+    <link rel="stylesheet" href="css/default.css">
+
+    <link rel="stylesheet" href="css/options.css">
+    <link rel="stylesheet" href="/lib/tooltip/tooltip.css">
+
+    <!--3rd party libraries -->
+      <!-- jquery -->
+      <script src="/lib/jquery-3.6.0.min.js"></script>
+      <script src="/lib/jqueryui/jquery-ui.min.js"></script>
+      <script src="/lib/jqueryui/jquery.ui.touch-punch.min.js"></script>
+      <link rel="stylesheet" href="/lib/jqueryui/jquery-ui.min.css">
+      <!-- jscolor -->
+      <script src="/lib/jscolor/jscolor.min.js"></script>
+      <!-- fontawesome -->
+      <link rel="stylesheet" href="/lib/fontawesome/css/all.min.css">
+
+
+    <script src="js/options.js"></script>
+  </head>
+
+  <body>
+    <div class="main_container">
+      <div class="sidenav">
+        <span class="title"><button class="mobile"><i class="fas fa-bars"></i></button><span class="logo"><span class="yellow">Re</span>Torn</span></span>
+        <ul class="tabs">
+          <li tabindex="0" aria-label="notifications section" data-tab="notifications"><i class="fas fa-bell"></i> Notifications</li>
+          <li tabindex="0" aria-label="features section" data-tab="features"><i class="fas fa-tasks"></i> Features</li>
+          <li tabindex="0" aria-label="settings section" data-tab="settings"><i class="fas fa-cog"></i> Settings</li>
+          <li tabindex="0" aria-label="tornstats section" data-tab="tornstats"><img src="../images/TornStats.png" width="16px" height="16px" style="vertical-align:middle;"> <span>Torn Stats</span></li>
+          <li tabindex="0" aria-label="discord section" data-tab="discord"><i class="fa-brands fa-discord"></i> Discord</li>
+          <li tabindex="0" aria-label="attributions section" data-tab="attributions"><i class="fa-brands fa-creative-commons-by"></i> Attributions</li>
+        </ul>
+        <span class="version float-topright"></span>
+      </div>
+
+      <div class="mainview">
+        <div class="tab_groups">
+
+          <div class="tab_container" id="notifications">
+            <h3 class="menu_title">Notifications</h3>
+
+            <section class="card-container">
+              <article class="card">
+                <div class="card-content" id="notifications_card">
+                </div>
+              </article>
+            </section>
+
+          </div><!-- end of tab container -->
+
+          <div class="tab_container" id="features">
+            <h3 class="menu_title">Features</h3>
+              <section class="card-container">
+                <article class="card">
+                  <div class="card-content" id="features_card">
+                  </div>
+                </article>
+              </section>
+
+          </div><!-- end of tab container -->
+
+          <div class="tab_container" id="settings">
+            <h3 class="menu_title">Settings</h3>
+
+            <section class="card-container">
+
+              <article class="card">
+                <div class="card-content">
+                  <div class="category wide"><h4 class="capitalize">ReTorn Settings:</h4>
+                    <div class="switch-holder">
+                      <input class="switch-label" type="checkbox" id="darkmode" aria-label="Darkmode within ReTorn (options/popup)">
+                      <span for="darkmode" class="tooltip-right" aria-label="Darkmode" data-tooltip="Darkmode within ReTorn (options/popup)">Darkmode</span>  
+                    </div>
+                  </div>
+                  <div class="category wide"><h4 class="capitalize">ReTorn Header:</h4>
+                    <div class="re_head">
+                      <span class="re_title"><span id="re_title">Example Title</span></span>
+                    </div>
+                    <div class="switch-holder">
+                      <input type="text" data-jscolor="{}" id="header_color" aria-label="ReTorn Header color hex code">
+                    </div>
+                    <h5><b>Color Suggestions:</b></h5>
+                    <div class="colorcodes">
+                      <button class="color_code" style="color: #E0CE00;" data-color="#E0CE00" aria-label="Set header color to Default ReTorn color (yellow)">ReTorn</button>
+                      <button class="color_code" style="color: #8ABEEF;" data-color="#8ABEEF" aria-label="Set header color to TornStats color (light blue)">Torn Stats</button>
+                      <button class="color_code" style="color: #663399;" data-color="#663399" aria-label="Set header color to DocTorn color (purple)">DocTorn</button>
+                      <button class="color_code" style="color: #627E0D;" data-color="#627E0D" aria-label="Set header color to TornTools color (green)">TornTools</button>
+                      <button class="color_code" style="color: #555555;" data-color="#555555" aria-label="Set header color to Torn color (gray)">Torn</button>
+                      <button class="color_code" style="color: #FF69B4;" data-color="#FF69B4" aria-label="Set header color to Hot Pink">Hot Pink</button>
+
+                    </div>
+                  </div>
+
+                  <div class="category wide"><h4 class="capitalize">Quick Links:</h4>
+                    <ul class="fa-ul" id="quicklinks"></ul>
+                  </div>
+                  <div class="category wide"><h4 class="capitalize">Chat Highlights:<i class="tooltip-left float-right text-normal" data-tooltip="Start text with @ to match usernames in chat. Start text with * to match any. Otherwise, text matches exact."><i class="fas fa-info-circle"></i></i>
+                  </h4>
+                    <div id="chat_highlights">
+
+                    </div>
+                  </div>
+                  <div class="category wide"><h4 class="capitalize">NPC List:</h4>
+                    <div id="npc_list">
+                      <select aria-label="NPC list sidebar position">
+                        <option value="1">Bottom of player lists</option>
+                        <option value="2">Above messages/events/awards</option>
+                        <option value="3">Below messages/events/awards</option>
+                      </select>
+                    </div>
+                  </div>
+
+                </div>
+              </article>
+
+            </section>
+          </div><!-- end of tab container -->
+
+          <div class="tab_container" id="discord">
+            <h3 class="menu_title">Discord</h3>
+            <section class="card-container">
+              <article class="card">
+                <div class="card-content">
+
+                  <div class="category wide">
+                    <span>Join the ReTorn Discord to report bugs and request new features! Click the link below.</span>
+                    <div class="mb20"><a href="https://discord.gg/SqKDND7FBA" target="_blank">https://discord.gg/SqKDND7FBA</a></div>
+                  </div>
+
+                </div>
+              </article>
+            </section>
+          </div><!-- end of tab container -->
+
+          <div class="tab_container" id="tornstats">
+            <h3 class="menu_title">Torn Stats</h3>
+            <section class="card-container">
+              <article class="card">
+                <div class="card-content">
+
+                  <div class="category wide">
+                    <span>
+                      Many ReTorn features rely on the <a href="https://www.tornstats.com/api"  target="_blank">Torn Stats API</a>.
+                    </span>
+                    <p>
+                      In order to use these Torn Stats related features, you must have a <b><a href="https://www.tornstats.com/"  target="_blank">Torn Stats account</a></b> and then use the button below to link your Torn Stats account with ReTorn.
+                    </p>
+                    <div id="tornstats">
+                      <p>Torn Stats Status: <b><span id="ts_status"></span></b></p>
+                      <span id="ts_link_wrap">
+                        <b><p>Please enter the <a href="https://www.torn.com/preferences.php#tab=api" target="_blank">API key</a> you use for <a href="https://www.tornstats.com/"  target="_blank">Torn Stats</a>:</p></b>
+                        <p>You can view the Terms of Service for Torn Stats <a href="https://www.tornstats.com/tos">here</a>.</p>
+                        <input id="ts_apikey" type="text" maxlength="19" required></input>
+                      </span>
+                      <button class="mb10" id="tornstats">Link Account</button>
+                      <p class="re_message" id="ts_message" hidden></p>
+                    </div>
+                  </div>
+
+                </div>
+              </article>
+            </section>
+          </div><!-- end of tab container -->
+
+          
+
+          <div class="tab_container" id="attributions">
+            <h3 class="menu_title">Credits and Attributions</h3>
+            <section class="card-container">
+              <article class="card">
+                <div class="card-content">
+                  <div class="category wide">
+                    <ul class='credits'>
+                      <li><span>ReTorn was made by me: <a href="https://www.torn.com/profiles.php?XID=1468764" target="_blank">Heasleys4hemp [1468764]</a>. I am epic.</span></li>
+                      <li><span>Thank you to <a href="https://www.torn.com/profiles.php?XID=776"  target="_blank">IceBlueFire [776]</a> for your wonderful integration with <a href="https://www.tornstats.com/"  target="_blank">Torn Stats</a>.</span></li>
+                      <li><span>Thank you to all of my friends for always being supportive of my work.</span></li>
+                      <li><span><a href="https://www.flaticon.com/free-icon/rifle_2062174"  target="_blank">Rifle Icon</a> provided by <a href="https://www.freepik.com" title="Freepik"  target="_blank">Freepik</a> from <a href="https://www.flaticon.com/" title="Flaticon"  target="_blank">www.flaticon.com</a></span></li>
+                      <li><span>Icons provided for free by <a href="https://fontawesome.com/" target="_blank" title="FontAwesome">FontAwesome</a></span></li>
+                    </ul>
+                    <p><a href='https://www.retorn.rocks/privacy' target='_blank'>Privacy Policy</a></p>
+                    <ul class="tabs"><li data-tab="advanced"><button aria-label="Open advanced settings section">Advanced Settings</button></li></ul>
+                </div>
+                </div>
+              </article>
+            </section>
+          </div><!-- end of tab container -->
+
+          <div class="tab_container" id="advanced">
+            <h3 class="menu_title">Advanced Settings</h3>
+            <section class="card-container">
+              <article class="card">
+                <div class="card-content">
+                  <div class="category">
+                    <h4 class="capitalize">Debug Menu:</h4>
+                    <div class="switch-holder">
+                      <input class="switch-label" type="checkbox" id="interceptFetch_logs" aria-label="Toggle intercept fetch logs within browser console">
+                      <span for="interceptFetch_logs" class="tooltip-right" data-tooltip="Toggle intercept fetch logs within browser console">Intercept Fetch Logs</span>  
+                    </div>
+                    <button id="reset" class="m10">Reset ReTorn Settings</button>
+                    <button id="test_notification" class="m10">Test Notification</button>
+                    <button id="copy_sync_to_clipboard" class="m10">Copy Sync Settings to Clipboard</button>
+                    <button id="copy_local_to_clipboard" class="m10">Copy Local Settings to Clipboard</button>
+
+                    <button id="force_torn_items" class="m10" tooltip="Refresh Items Cache" flow="top">Force Refresh Items Cache</button>
+                    <p class="m10">Items API last updated:
+                      <b><span id="items_last_update"></span></b>
+                    </p>
+                  </div>
+
+                </div>
+                <ul class="tabs beyond"><li data-tab="beyond"><a>The Great Beyond</a></li></ul>
+              </article>
+            </section>
+          </div><!-- end of tab container -->
+
+          <div class="tab_container" id="beyond">
+            <h3 class="menu_title">The Great Beyond</h3>
+            <section class="card-container">
+              <article class="card">
+                <div class="card-content">
+
+                  <div class="category"><h4 class="capitalize">Secret Settings:</h4>
+                    <div class="switch-holder">
+                      <input class="switch-label" type="checkbox" id="torn3d" aria-label="Enabled Torn 3D (glitchy)">
+                      <span for="torn3d" class="tooltip-right" data-tooltip="Turn Torn 3D!!!!!">Torn 3D</span>  
+                    </div>
+                  </div>
+
+                </div>
+              </article>
+            </section>
+          </div><!-- end of tab container -->
+
+        </div>
+      </div>
+    </div>
+
+  </body>
+
+</html>

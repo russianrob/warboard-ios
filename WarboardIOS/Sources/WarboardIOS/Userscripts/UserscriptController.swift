@@ -66,6 +66,8 @@ final class UserscriptController: NSObject, ObservableObject {
         config.allowsInlineMediaPlayback = true
         config.defaultWebpagePreferences.allowsContentJavaScript = true
         config.preferences.javaScriptCanOpenWindowsAutomatically = true
+        // Serve bundled WebExtension resources for browser.runtime.getURL().
+        config.setURLSchemeHandler(ExtResourceScheme(), forURLScheme: ExtResourceScheme.scheme)
         self.configuration = config
         super.init()
 

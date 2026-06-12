@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en" lang="en" class="dark">
+  <head>
+    <title>ReTorn: Popup</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <link rel="stylesheet" href="css/colors.css">
+    <link rel="stylesheet" href="css/default.css">
+    <link rel="stylesheet" href="css/popup_start.css">
+    <link rel="stylesheet" href="css/popup.css">
+    <link rel="stylesheet" href="/lib/tooltip/tooltip.css">
+
+    <script src="/lib/jquery-3.6.0.min.js"></script>
+    <link href="/lib/fontawesome/css/all.min.css" rel="stylesheet">
+
+  </head>
+
+  <body class="dark">
+    <div>
+      <span class="title"><span class="logo"><span class="yellow">Re</span>Torn</span>: <a href="https://www.torn.com/index.php" target="_blank" class="to_torn" id="re_user"></a></span>
+    </div>
+
+    <div class="" id="status">&nbsp;</div>
+
+    <div class="progress_bars">
+      <a href="https://www.torn.com/gym.php" target="_blank">
+        <label for="energy"><span>Energy: <span id="energy_text"></span></span><span class="countdown tooltip-left" data-tooltip="Time until full" id="energy_countdown"></span></label>
+        <div class="progressbar">
+          <span id="energy" style="width: 0%"></span>
+        </div>
+      </a>
+
+      <a href="https://www.torn.com/crimes.php" target="_blank">
+        <label for="nerve"><span>Nerve: <span id="nerve_text"></span></span><span class="countdown tooltip-left" data-tooltip="Time until full" id="nerve_countdown"></span></label>
+        <div class="progressbar">
+          <span id="nerve" style="width: 20%"></span>
+        </div>
+      </a>
+
+      <a href="https://www.torn.com/item.php#candy-items" target="_blank">
+        <label for="happy"><span>Happy: <span id="happy_text"></span></span><span class="countdown tooltip-left"  data-tooltip="Time until full" id="happy_countdown"></span></label>
+        <div class="progressbar">
+          <span id="happy" style="width: 0%"></span>
+        </div>
+      </a>
+
+      <a href="https://www.torn.com/item.php#medical-items" target="_blank">
+        <label for="life"><span>Life: <span id="life_text"></span></span><span class="countdown tooltip-left" data-tooltip="Time until full" id="life_countdown"></span></label>
+        <div class="progressbar">
+          <span id="life" style="width: 0%"></span>
+        </div>
+      </a>
+
+      <a href="https://www.torn.com/factions.php?step=your#/war/chain" target="_blank" hidden>
+        <label for="life"><span>Chain: <span id="chain_text"></span></span><span class="countdown tooltip-left" data-tooltip="Time until chain cooldown" id="chain_countdown"></span></label>
+        <div class="progressbar">
+          <span id="chain" style="width: 0%"></span>
+        </div>
+      </a>
+
+    </div>
+
+    <div class="cooldowns">
+      <a href="https://www.torn.com/item.php#boosters-items" target="_blank"><span class="torn_icons booster_icon"></span><span id="booster">0hr 0m 0s</span></a>
+      <a href="https://www.torn.com/item.php#medical-items" target="_blank"><span class="torn_icons medical_icon"></span><span id="medical">0hr 0m 0s</span></a>
+      <a href="https://www.torn.com/item.php#drugs-items" target="_blank"><span class="torn_icons drug_icon"></span><span id="drug">0hr 0m 0s</span></a>
+    </div>
+
+    <div class="wealth">
+      <a href="https://www.torn.com/properties.php#/p=options&tab=vault" target="_blank"><div>Money: <span id="cash">0</span></div></a>
+      <a href="https://www.torn.com/points.php" target="_blank" hidden><div>Points: <span id="points">0</span></div></a>
+      <a href="https://www.torn.com/properties.php#/p=options&tab=vault" target="_blank"><div>Vault: <span id="vault">0</span></div></a>
+    </div>
+
+    <div>
+      <span class="last_update">Last Updated: <span id="last_updated">&nbsp;</span></span>
+    </div>
+
+    <div class="messages">
+      <span class="error" id="re_message">&nbsp;</span>
+    </div>
+
+    <div class="buttons">
+      <button id="re_options">Options</button>
+      <button id="toggle_notifications" class="tooltip-top" data-tooltip=""><i class="fa-regular"></i></button>
+      <button id="re_logout">Logout</button>
+    </div>
+
+    <script src="js/popup_start.js"></script>
+    <script src="js/popup.js"></script>
+</html>

@@ -1,0 +1,411 @@
+/*
+##
+## Add to Quick Items Button
+##
+*/
+li.re_add_qitem {
+  font-size: 12px;
+  top: 0;
+  left: 0;
+  position: relative;
+  margin-top: 0;
+  width: 34px;
+  height: 31px;
+  text-align: center;
+  float: left;
+}
+.qitem-btn { /* Color flip for default + button for quick items blue */
+  filter: sepia(50%) hue-rotate(144deg) saturate(100%) !important;
+}
+.qitem-btn.re_info { /* Less margin and size for the Quick Items Header info circle */
+  background-position: -8px -42px !important;
+  height: 20px !important;
+  width: 17px !important;
+}
+#re_quick_items .qitem-btn.re_info, #re_quick_equip .qitem-btn.re_info { /* Info button for the main quick items container should be normal margins */
+  margin-left: 3px;
+  margin-right: 3px;
+  margin-top: 2px;
+}
+
+
+#re_quick_items, #re_quick_equip {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+}
+
+#re_quick_items div, #re_quick_equip div {
+  padding: 0px;
+  align-self: stretch;
+  flex: 0 0 30%;
+  display: flex;
+  justify-content: center;
+  max-width: 105px;
+}
+
+#re_quick_items_response, #re_quick_equip_response {
+  justify-content: center;
+}
+
+#re_quick_items_response > img.ajax-placeholder, #re_quick_equip_response > img.ajax-placeholder {
+  left: 0;
+  margin-left: 0px;
+}
+
+/* Pointer for close or cancel button/links in response area */
+#re_quick_items_response .close-act, #re_quick_equip_response .close-act {
+  cursor: pointer;
+}
+
+
+#re_quick_items div.re_button, #re_quick_equip div.re_button { /* button container */
+  margin: 5px;
+  border-radius: 5px;
+}
+
+#re_quick_items div.re_button button, #re_quick_equip div.re_button button {
+  padding: 5px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  -webkit-flex-direction: column;
+  -ms-flex-direction: column;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  width: 100%;
+}
+
+div.re_button .re_name, div.re_button .re_qty{
+  font-size: 12px;
+}
+
+#re_quick_equip div.re_button .re_name {
+  font-size: 11px;
+}
+
+.re_quick_items div.re_button button .re_image_container {
+    position: relative;
+    width: 50px;
+    max-width: 50px;
+}
+
+#re_quick_items div.re_button button .re_image_container img.re_item_img, #re_quick_equip div.re_button button .re_image_container img.re_item_img {
+  vertical-align: middle;
+  width: 50px;
+  display: block
+}
+
+div.re_button button .re_image_container .re_overlay_icon {
+    position: absolute;
+    top: 0px;
+    left: -11px;
+    z-index: 2;
+    fill: url(#top_header_svg_gradient__regular);
+}
+
+#re_quick_items.re_disabled button:hover, #re_quick_equip.re_disabled button:hover {
+  cursor: default;
+}
+#re_quick_items.re_disabled.re_modify_active button:hover, #re_quick_equip.re_disabled.re_modify_active button:hover {
+  cursor: grab;
+}
+#re_quick_items.re_disabled .re_button:hover, #re_quick_equip.re_disabled .re_button:hover {
+  background-color: transparent;
+}
+
+.re_quick_items:not(:has(#re_quick_items > *)) + .re_quick_equip .re_hr {
+  display: none;
+}
+
+.re_quick_equip .re_hr {
+  border-bottom-color:#999;
+  margin-left: 15px;
+  margin-right: 15px;
+}
+body.dark-mode .re_quick_equip .re_hr {
+  border-bottom-color:#222;
+}
+
+/* Quick Equip > stats and stat icons */
+#re_quick_equip .re_bonuses, #re_quick_equip .re_stats {
+  width: 100%;
+  font-size: 11px;
+}
+
+#re_quick_equip .re_bonuses {
+  display: flex;
+  flex-direction: column;
+}
+
+#re_quick_equip .re_stats, #re_quick_equip .re_stats > span {
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+}
+
+#re_quick_equip .re_stats {
+  justify-content: space-around;
+}
+
+#re_quick_equip .re_stats [class^="bonus-attachment-"] {
+  height: 14px;
+  width: 14px;
+}
+
+#re_quick_equip .re_stats .bonus-attachment-item-damage-bonus {
+  background-position: -117px -11px;
+}
+
+#re_quick_equip .re_stats .bonus-attachment-item-accuracy-bonus {
+  background-position: -115px -80.5px;
+}
+
+#re_quick_equip .re_stats .bonus-attachment-item-defence-bonus {
+  background-position: -117px -185.5px;
+}
+
+
+/* Modify Quick Items close and handle buttons */
+.close:before {
+  content: '✕';
+}
+.close {
+  position: absolute;
+  top: 0px;
+  right: 3px;
+  cursor: pointer;
+  font-size: 15px;
+}
+.re_handle:before {
+  content: '≡';
+}
+.re_handle {
+  position: absolute;
+  top: 0px;
+  left: 4px;
+  cursor: grab;
+  font-size: 20px;
+}
+.re_sortable_placeholder {
+  background-color: var(--items-cont-bg-color);
+}
+
+
+/* quick items Supply Pack css handling */
+.re-pack-open-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+}
+.re-pack-open-result .cache-item {
+  margin: 5px;
+  display: block;
+  height: 50px;
+  width: 100px;
+  border-right: none;
+  border-left: none;
+  border-top: none;
+  border-bottom: 1px solid #fff;
+  border-radius: 6px;
+  background: var(--items-plate-background-color) var(--items-plate-background);
+  border: var(--items-plate-border);
+  border-color: var(--items-plate-border-color);
+  box-shadow: var(--items-plate-box-shadow);
+}
+.re-pack-open-result .item-image-container {
+    position: relative;
+}
+.re-pack-open-result .item-amount {
+    position: absolute;
+    right: 10px;
+    bottom: 12px;
+    font-weight: 700;
+    font-size: 11px;
+    line-height: 11px;
+    color: var(--items-plate-qty-color);
+    text-shadow: var(--items-plate-qty-text-shadow);
+    opacity: 0;
+    animation: fadeIn 1ms;
+    animation-fill-mode: forwards;
+}
+.re-pack-open-result .cache-item.single-unique {
+  background: url(https://www.torn.com/images/v2/items/gentleman/weapon_box.svg) left top no-repeat;
+  background-size: 100% 100%;
+  display: flex;
+  flex-direction: column;
+  width: 110px;
+  height: 88px;
+}
+.re-pack-open-result .item-bonuses {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    margin-left: 3px;
+    margin-right: 3px;
+}
+.re-pack-open-result .item-bonuses {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    margin-left: 3px;
+    margin-right: 3px;
+}
+.re-pack-open-result .cache-item .bonuses-holder {
+    display: flex;
+    justify-content: end;
+    width: 100%;
+    align-items: center;
+}
+.re-pack-open-result .cache-item .bonuses-holder>* {
+    margin-left: 3px;
+}
+
+
+/* ReTorn's Value on each item */
+.re_value {
+  color: #999;
+  font-size: 10px;
+  margin-left: 3px;
+  vertical-align: middle !important;
+}
+
+
+/* Modified Torn CSS */
+.d .items-cont .re_qitemWrap.actions { /* equippable items has weirdness with action buttons, so need to shrinks */
+width: 172px !important;
+}
+.d .re_qitemWrap.name-wrap { /* Name wrap should only be as wide as needed */
+    width: auto !important;
+}
+
+/* Quick Equip */
+#re_quick_equip_response.re_row.items-cont {
+  flex-direction: column;
+  align-content: center;
+}
+
+#re_quick_equip_response.re_row.items-cont > li {
+  line-height: unset;
+  border: 0;
+  display: unset;
+  text-align: left;
+}
+#re_quick_equip_response.re_row.items-cont > li:hover {
+  background-color: unset;
+}
+
+/*  CSS hack to prevent Torn from hiding element automatically after re-equip */
+.re_quick_equip .action-wrap {
+  display: flex !important;
+  justify-content: center;
+  margin: 0.75em;
+}
+
+#re_quick_equip_response.re_row.items-cont > li .actions {
+  height: auto;
+  width: auto;
+}
+
+
+.d .items-cont .bonuses.re_qitemWrap {
+  right: 172px;
+}
+
+
+
+/* quick items compact view */
+.re_quick_items_compact .re_qty, .re_quick_items_compact .re_bonuses {
+  display: none !important;
+}
+
+.re_quick_items_compact #re_quick_items div.re_button, .re_quick_items_compact #re_quick_equip div.re_button {
+  margin: 2px;
+}
+
+.re_quick_items_compact div.re_button .re_name {
+  font-size: 10px !important;
+}
+
+.re_quick_items_compact .re_hr {
+  display: none;
+}
+
+
+
+@media screen and (max-width: 784px) {
+  html:not(.html-manual-desktop) .r .items-cont .re_qitemWrap.actions {
+    width: 386px !important;
+  }
+
+  html:not(.html-manual-desktop) .re_qitemWrap.actions .actions-wrap li {
+    width: 77px;
+  }
+
+  html:not(.html-manual-desktop) .d .re_qitemWrap.actions .actions-wrap>li:first-child {
+    border-left: 1px solid;
+    border-left-color: var(--default-panel-divider-outer-side-color);
+  }
+}
+
+@media screen and (max-width: 784px) {
+  html:not(.html-manual-desktop) .d .re_qitemWrap .option-use, html:not(.html-manual-desktop) .d .re_qitemWrap .option-turn-on, html:not(.html-manual-desktop) .d .re_qitemWrap .option-equip, html:not(.html-manual-desktop) .d .re_qitemWrap .option-unequip, html:not(.html-manual-desktop) .d .re_qitemWrap .option-sell, html:not(.html-manual-desktop) .d .re_qitemWrap .option-send, html:not(.html-manual-desktop) .d .re_qitemWrap .option-delete, html:not(.html-manual-desktop) .d .re_qitemWrap .option-return-to-faction, html:not(.html-manual-desktop) .d .re_qitemWrap .option-donate-faction {
+    width: 29px;
+  }
+}
+
+@media screen and (max-width: 386px) {
+  html:not(.html-manual-desktop) .re_qitemWrap.actions .actions-wrap li {
+    width: 64px;
+  }
+
+  html:not(.html-manual-desktop) .r .items-cont .re_qitemWrap.actions {
+    width: 321px !important;
+  }
+
+  html:not(.html-manual-desktop) .d .re_qitemWrap .option-use, html:not(.html-manual-desktop) .d .re_qitemWrap .option-turn-on, html:not(.html-manual-desktop) .d .re_qitemWrap .option-equip, html:not(.html-manual-desktop) .d .re_qitemWrap .option-unequip, html:not(.html-manual-desktop) .d .re_qitemWrap .option-sell, html:not(.html-manual-desktop) .d .re_qitemWrap .option-send, html:not(.html-manual-desktop) .d .re_qitemWrap .option-delete, html:not(.html-manual-desktop) .d .re_qitemWrap .option-return-to-faction, html:not(.html-manual-desktop) .d .re_qitemWrap .option-donate-faction {
+    width: 27px;
+  }
+
+  html:not(.html-manual-desktop) .r .items-wrap .re_qitemWrap.actions i, html:not(.html-manual-desktop) .r .items-wrap .re_qitemWrap.actions .wai-btn {
+    margin-left: -7px;
+  }
+
+  html:not(.html-manual-desktop) .r .items-wrap .re_qitemWrap.actions .opt-name {
+    margin-left: -2px;
+  }
+
+}
+
+/* Color CSS */
+#re_quick_items button, #re_quick_equip button  {
+  color: #000;
+}
+body.dark-mode #re_quick_items button, body.dark-mode #re_quick_equip button {
+  color: #DDD;
+}
+
+
+
+
+/* right click context menu */
+#re_context_menu {
+  position: absolute;
+  background: var(--default-bg-panel-color);
+  border: var(--btn-border);
+  display: none;
+  z-index: 1000;
+}
+
+.re_context_menu_item {
+  padding: 8px 12px;
+  color: var(--default-color);
+  cursor: pointer;
+}
+
+.re_context_menu_item:hover {
+  background: var(--default-bg-panel-active-color);
+}

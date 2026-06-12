@@ -48,6 +48,11 @@ targets:
       # .xcassets directory into the bundle without compiling — and
       # iOS only loads icons from a compiled Assets.car.
       - path: WarboardIOS/AppIcon/Assets.xcassets
+      # Bundled WebExtension (ReTorn) tree — folder reference so the directory
+      # structure is preserved in the bundle; ExtResourceScheme serves it for
+      # browser.runtime.getURL() via webext://retorn/<path>.
+      - path: WarboardIOS/Resources/retorn
+        type: folder
     dependencies:
       - target: WarboardIOS
       - target: ChainWidget

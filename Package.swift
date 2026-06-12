@@ -27,7 +27,8 @@ let package = Package(
                 "BrowserView.swift",
                 "QuickItemsBar.swift",
                 "ScriptsView.swift",
-                "InstallScriptView.swift"
+                "InstallScriptView.swift",
+                "WebExt"
             ]
         ),
         .testTarget(

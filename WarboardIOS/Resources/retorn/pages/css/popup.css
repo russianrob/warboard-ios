@@ -1,0 +1,140 @@
+body {
+    width: 384px !important;
+    height: auto;
+}
+
+div > a {
+    border-radius: 3px;
+    color: var(--re-text);
+}
+
+div.progress_bars {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: stretch;
+}
+
+.progress_bars label {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    margin-bottom: 2px;
+}
+
+.progressbar {
+    height: 1em;
+    position: relative;
+    background: #ddd;
+    box-shadow: inset 0 2px 5px rgb(0 0 0 / 25%);
+    margin-bottom: 5px;
+    margin-left: 0px;
+    margin-right: 0px;
+}
+
+
+.progress_bars > a, .cooldowns > a {
+    padding: 4px;
+}
+.progress_bars > a {
+    margin-bottom: 6px;
+}
+.progress_bars > a:first-child {
+    margin-top: 6px;
+}
+
+html.light .progress_bars > a:hover, html.light .wealth div:hover, html.light .cooldowns a:hover {
+    box-shadow: 0 0px 4px #000000ee, inset 0 0px 1px #000000bb;
+}
+html.dark .progress_bars > a:hover, html.dark .wealth div:hover, html.dark .cooldowns a:hover {
+    box-shadow: 0 0px 2px #ffffffee, inset 0 0px 1px #ffffffbb;
+}
+
+.progress_bars > a:active, .wealth div:active, .cooldowns a:active {
+    transform: translateY(2px);
+}
+
+.progressbar > span {
+    display: block;
+    height: 100%;
+    background-color: black;
+    background-image: linear-gradient(
+      center bottom,
+      rgb(43,194,83) 37%,
+      rgb(84,240,84) 69%
+    );
+    box-shadow:
+      inset 0 2px 9px  rgba(255,255,255,0.3),
+      inset 0 -2px 6px rgba(0,0,0,0.4);
+    position: relative;
+    overflow: hidden;
+}
+
+html.light div.progressbar > span#energy {
+    background-color: #6cad2b !important;
+}
+html.dark div.progressbar > span#energy {
+    background-color: #4d7c1e !important;
+}
+
+html.light div.progressbar > span#nerve {
+    background-color: #cc7032 !important;
+}
+html.dark div.progressbar > span#nerve {
+    background-color: #b3382c !important;
+}
+
+html.light div.progressbar > span#happy {
+    background-color: #cccc32 !important;
+}
+html.dark div.progressbar > span#happy {
+    background-color: #b3992c !important;
+}
+
+html.light div.progressbar > span#life {
+    background-color: #708bdb !important;
+}
+html.dark div.progressbar > span#life {
+    background-color: #3f43cf !important;
+}
+
+
+div.buttons, div.messages {
+    margin-top: 10px;
+}
+
+.cooldowns, .wealth {
+    display: flex;
+    justify-content: space-around;
+    line-height: 2em;
+}
+.cooldowns > a, .wealth > a {
+    flex: 1;
+    margin:5px
+}
+.torn_icons {
+    list-style: none;
+    display: inline;
+    margin-block-start: 0px;
+    margin-block-end: 0px;
+    margin-inline-start: 0px;
+    margin-inline-end: 0px;
+    padding-inline-start: 0px;
+}
+span.torn_icons {
+  background-image: url('/images/user_status_icons_sprite.svg');
+  width: 16px;
+  height: 16px;
+  margin: 5px 0px 0px 0px;
+  list-style-type: none;
+  float: left;
+}
+.booster_icon {
+  background-position: -684px 0;
+}
+.medical_icon {
+  background-position: -774px 0;
+}
+.drug_icon {
+  background-position: -936px 0;
+}
