@@ -310,7 +310,7 @@ private struct ScriptEditorView: View {
     private let title: String
     private let onSave: (String) -> Void
     @State private var text: String
-    @State private var error: String?
+    @State private var errorText: String?
 
     init(script: Userscript, onSave: @escaping (String) -> Void) {
         self.title = script.name
@@ -325,8 +325,8 @@ private struct ScriptEditorView: View {
                 .autocorrectionDisabled(true)
                 .textInputAutocapitalization(.never)
                 .overlay(alignment: .bottom) {
-                    if let error {
-                        Text(error)
+                    if let errorText {
+                        Text(errorText)
                             .font(.caption).foregroundStyle(.white)
                             .padding(8).background(.red, in: RoundedRectangle(cornerRadius: 8))
                             .padding(.bottom, 8)
@@ -342,7 +342,7 @@ private struct ScriptEditorView: View {
                         Button("Save") {
                             do { _ = try MetadataParser.parse(text) }
                             catch {
-                                error = "The // ==UserScript== block has an error — fix it before saving."
+                                errorText = "The // ==UserScript== block has an error — fix it before saving."
                                 return
                             }
                             onSave(text); dismiss()
