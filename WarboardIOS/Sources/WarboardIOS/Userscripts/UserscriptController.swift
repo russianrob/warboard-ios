@@ -51,6 +51,12 @@ final class UserscriptController: NSObject, ObservableObject {
     /// menu-command callbacks back into the page.
     private weak var webView: WKWebView?
 
+    /// A URL we just re-issued via `webView.load(...)` to keep a cross-host
+    /// Torn navigation inside this web view (see `decidePolicyFor`). When that
+    /// app-initiated load comes back through the delegate we recognize it by
+    /// this marker and let it proceed, instead of cancelling it again (loop).
+    private var forcedInAppLoadURL: String?
+
     /// Built once; handed to the WKWebView. We mutate its
     /// userContentController per navigation.
     let configuration: WKWebViewConfiguration
@@ -239,6 +245,34 @@ extension UserscriptController: WKNavigationDelegate {
             decisionHandler(.cancel)
             pendingInstall = PendingInstall(url: url)
             return
+        }
+
+        // Keep cross-host Torn navigations inside this web view. iOS routes a
+        // programmatic, cross-origin WKWebView navigation to a Universal-Link
+        // handler when the destination domain claims one — wiki.torn.com serves
+        // its own apple-app-site-association handing its links to TornPDA — which
+        // yanks the user out of warboard into PDA. Re-issuing the load ourselves
+        // (an app-initiated `load`, unlike a page-initiated nav) is NOT eligible
+        // for Universal-Link routing, so the page loads in-app instead. Scoped to
+        // *.torn.com cross-host hops so ordinary same-domain SPA navs are untouched.
+        if navigationAction.targetFrame?.isMainFrame == true,
+           let url = navigationAction.request.url,
+           url.scheme == "https" || url.scheme == "http",
+           let destHost = url.host,
+           destHost == "torn.com" || destHost.hasSuffix(".torn.com"),
+           let curHost = webView.url?.host,
+           destHost.caseInsensitiveCompare(curHost) != .orderedSame,
+           forcedInAppLoadURL != url.absoluteString {
+            forcedInAppLoadURL = url.absoluteString
+            WebDiag.log("crosshost-keep", ["url": url.absoluteString, "from": curHost])
+            decisionHandler(.cancel)
+            webView.load(navigationAction.request)
+            return
+        }
+        // Our own re-issued load returning through the delegate — clear the
+        // marker so a later genuine nav to the same URL is handled normally.
+        if navigationAction.request.url?.absoluteString == forcedInAppLoadURL {
+            forcedInAppLoadURL = nil
         }
 
         // Only main-frame, real-URL navigations trigger a rebuild; subframes
