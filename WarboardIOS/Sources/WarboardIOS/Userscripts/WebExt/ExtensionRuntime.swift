@@ -22,6 +22,7 @@ final class ExtensionRuntime {
     }
 
     private init() {
+        Self.installCrashLogger()
         let loaded = ExtManifest.loadReTorn()
         manifest = loaded
         relay = ExtMessageRelay(storage: storage)
@@ -78,6 +79,19 @@ final class ExtensionRuntime {
         for ex in cs.excludeMatches ?? [] where ExtMatchPattern.matches(ex, url) { return false }
         for pattern in cs.matches where ExtMatchPattern.matches(pattern, url) { return true }
         return false
+    }
+
+    /// Route uncaught NSExceptions (WKURLSchemeTask / WKScriptMessageHandlerWithReply
+    /// misuse both throw these) to the warboard log so a native crash in the
+    /// runtime is diagnosable server-side instead of a silent kill.
+    private static func installCrashLogger() {
+        NSSetUncaughtExceptionHandler { exception in
+            WebDiag.log("webext-crash", [
+                "name": exception.name.rawValue,
+                "reason": exception.reason ?? "",
+                "stack": exception.callStackSymbols.prefix(24).joined(separator: " || "),
+            ])
+        }
     }
 
     static func bundledText(_ relativePath: String) -> String? {

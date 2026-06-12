@@ -41,16 +41,17 @@ final class ExtResourceScheme: NSObject, WKURLSchemeHandler {
         guard let data = try? Data(contentsOf: fileURL) else {
             urlSchemeTask.didFailWithError(URLError(.fileDoesNotExist)); return
         }
-        let response = HTTPURLResponse(
+        let mime = Self.mime(for: fileURL.pathExtension)
+        let response: URLResponse = HTTPURLResponse(
             url: url,
             statusCode: 200,
             httpVersion: "HTTP/1.1",
             headerFields: [
-                "Content-Type": Self.mime(for: fileURL.pathExtension),
+                "Content-Type": mime,
                 "Content-Length": String(data.count),
                 "Access-Control-Allow-Origin": "*",
             ]
-        )!
+        ) ?? URLResponse(url: url, mimeType: mime, expectedContentLength: data.count, textEncodingName: nil)
         urlSchemeTask.didReceive(response)
         urlSchemeTask.didReceive(data)
         urlSchemeTask.didFinish()

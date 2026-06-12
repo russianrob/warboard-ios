@@ -43,17 +43,26 @@ final class ExtBackgroundHost: NSObject, WKNavigationDelegate {
     }
 
     /// Run the background's onMessage handlers for `message` and return the reply.
+    /// The WKWebView call is forced onto the main thread — this is a non-isolated
+    /// async func, so without the hop it can resume off-main and calling WKWebView
+    /// off the main thread crashes hard.
     func dispatch(_ message: Any, sender: [String: Any]) async -> Any? {
         await waitReady()
-        guard let wv = webView else { return nil }
-        do {
-            return try await wv.callAsyncJavaScript(
-                "return await window.__webext_handleMessage(m, s);",
-                arguments: ["m": message, "s": sender],
-                in: nil,
-                contentWorld: .page)
-        } catch {
-            return nil
+        return await withCheckedContinuation { (cont: CheckedContinuation<Any?, Never>) in
+            DispatchQueue.main.async { [weak self] in
+                guard let wv = self?.webView else { cont.resume(returning: nil); return }
+                wv.callAsyncJavaScript(
+                    "return await window.__webext_handleMessage(m, s);",
+                    arguments: ["m": message, "s": sender],
+                    in: nil,
+                    contentWorld: .page
+                ) { result in
+                    switch result {
+                    case .success(let value): cont.resume(returning: value)
+                    case .failure: cont.resume(returning: nil)
+                    }
+                }
+            }
         }
     }
 
