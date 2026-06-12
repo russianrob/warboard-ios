@@ -88,6 +88,13 @@ struct ManagerView: View {
         .onAppear {
             vm.bind(prefs: prefs); vm.start()
             Task { await session.refreshSignedInState() }
+            // onChange only fires on a tab SWITCH, so the default .missing tab
+            // never loaded its data (item-name resolution, armoury). Kick the
+            // initial tab here.
+            switch sub {
+            case .missing, .unused: vm.ensureMissingAndUnusedReady()
+            case .payouts:          vm.ensurePayoutsReady()
+            }
         }
         .onDisappear { vm.stop() }
         .onChange(of: sub) { _, newValue in

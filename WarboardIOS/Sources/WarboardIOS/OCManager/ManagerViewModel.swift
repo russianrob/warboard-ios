@@ -177,10 +177,7 @@ final class ManagerViewModel: ObservableObject {
     /// caps at 60 ids per request to stay well under Torn's URL limit.
     private func resolveMissingItemNames() async {
         guard case .ready(let list) = crimes,
-              let key = prefs?.apiKey, !key.isEmpty else {
-            Self.ocDiag(["stage": "skip", "hasKey": !((prefs?.apiKey ?? "").isEmpty)])
-            return
-        }
+              let key = prefs?.apiKey, !key.isEmpty else { return }
         let needed = Set(
             list.flatMap { c in
                 c.slots.compactMap { s -> Int64? in
@@ -192,26 +189,11 @@ final class ManagerViewModel: ObservableObject {
                 }
             }
         )
-        Self.ocDiag(["needed": needed.count, "sample": Array(needed.prefix(4)).map(String.init)])
         guard !needed.isEmpty else { return }
         let ids = Array(needed.prefix(60))
-        do {
-            let dict = try await ManagerAPI.fetchItemNames(apiKey: key, ids: ids)
-            Self.ocDiag(["fetched": dict.count])
+        if let dict = try? await ManagerAPI.fetchItemNames(apiKey: key, ids: ids) {
             for (k, v) in dict { itemNames[k] = v }
-        } catch {
-            Self.ocDiag(["error": "\(error)"])
         }
-    }
-
-    /// Temporary diagnostic for the "Missing rows show #id, not name" bug —
-    /// posts the resolver's progress to the warboard client-log. Remove once fixed.
-    nonisolated static func ocDiag(_ d: [String: Any]) {
-        guard let url = URL(string: "https://tornwar.com/api/debug/client-log") else { return }
-        var r = URLRequest(url: url); r.httpMethod = "POST"
-        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        r.httpBody = try? JSONSerialization.data(withJSONObject: ["tag": "oc-itemnames", "data": d])
-        URLSession.shared.dataTask(with: r).resume()
     }
 
     // MARK: — Derived projections
