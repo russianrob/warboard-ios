@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import UserNotifications
+import WarboardIOS   // framework module: BrowserRouter (.onOpenURL routing)
 
 /// Top-level scene. TabView root mirrors the Android warboard-native
 /// app's bottom navigation (Status / War / Faction / Settings). The
