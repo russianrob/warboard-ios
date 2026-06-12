@@ -33,6 +33,7 @@ final class ExtMessageRelay: NSObject, WKScriptMessageHandlerWithReply {
               let kind = body["kind"] as? String else {
             replyHandler(nil, "bad webext message"); return
         }
+        ExtCrashDiag.breadcrumb("relay:\(kind):\(Self.crumbDetail(kind, body))")
         switch kind {
         case "storage":
             handleStorage(body, replyHandler)
@@ -63,6 +64,25 @@ final class ExtMessageRelay: NSObject, WKScriptMessageHandlerWithReply {
             replyHandler(nil, nil) // Phase 3
         default:
             replyHandler(nil, "unknown webext kind: \(kind)")
+        }
+    }
+
+    /// A compact, plist-safe detail string for the breadcrumb trail: the storage
+    /// op + keys, the sendMessage `name`, or the apiFetch host — enough to know
+    /// exactly which step a crash report stopped at.
+    private static func crumbDetail(_ kind: String, _ body: [String: Any]) -> String {
+        switch kind {
+        case "storage":
+            let op = (body["op"] as? String) ?? "?"
+            let keys = (body["items"] as? [String: Any]).map { Array($0.keys) }
+                ?? (body["keys"] as? [String]) ?? (body["keys"] as? String).map { [$0] } ?? []
+            return "\(op):\(keys.joined(separator: ","))"
+        case "sendMessage":
+            return ((body["message"] as? [String: Any])?["name"] as? String) ?? "?"
+        case "apiFetch":
+            return URL(string: (body["url"] as? String) ?? "")?.host ?? "?"
+        default:
+            return (body["op"] as? String) ?? ""
         }
     }
 
@@ -99,6 +119,7 @@ final class ExtMessageRelay: NSObject, WKScriptMessageHandlerWithReply {
             let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
             let text = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
             DispatchQueue.main.async {
+                ExtCrashDiag.breadcrumb("apiFetch:reply:\(status)")
                 reply(["status": status, "ok": (200..<300).contains(status), "body": text], nil)
             }
         }.resume()

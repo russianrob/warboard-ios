@@ -50,13 +50,18 @@ final class ExtBackgroundHost: NSObject, WKNavigationDelegate {
     func dispatch(_ message: Any, sender: [String: Any]) async -> Any? {
         await waitReady()
         guard let wv = webView else { return nil }
+        let name = (message as? [String: Any])?["name"] as? String ?? "?"
+        ExtCrashDiag.breadcrumb("dispatch:call:\(name)")
         do {
-            return try await wv.callAsyncJavaScript(
+            let result = try await wv.callAsyncJavaScript(
                 "return await window.__webext_handleMessage(m, s);",
                 arguments: ["m": message, "s": sender],
                 in: nil,
                 contentWorld: .page)
+            ExtCrashDiag.breadcrumb("dispatch:ret:\(name)")
+            return result
         } catch {
+            ExtCrashDiag.breadcrumb("dispatch:err:\(name)")
             return nil
         }
     }
