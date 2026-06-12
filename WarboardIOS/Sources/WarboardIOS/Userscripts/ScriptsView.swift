@@ -111,6 +111,29 @@ final class ScriptsViewModel: ObservableObject {
         }
     }
 
+    /// Save an in-app edit of a script's source: re-parse its metadata, preserve
+    /// the install identity (id/enabled/order/wildcard grant), upsert, re-resolve
+    /// @require, and reload the live page so the change applies immediately.
+    func saveEdit(_ script: Userscript, source newSource: String) async {
+        isWorking = true; errorMessage = nil
+        defer { isWorking = false }
+        do {
+            let meta = try MetadataParser.parse(newSource)
+            var fresh = Self.makeScript(from: meta, source: newSource,
+                                        downloadURL: script.downloadURL ?? script.id)
+            fresh.id = script.id
+            fresh.enabled = script.enabled
+            fresh.order = script.order
+            fresh.wildcardConnectGranted = script.wildcardConnectGranted
+            try registry.upsert(fresh)
+            try? await resolver.resolve(fresh, forceRefetch: false)
+            reload()
+            NotificationCenter.default.post(name: .userscriptsDidChange, object: nil)
+        } catch {
+            errorMessage = "Save failed: \(error.localizedDescription)"
+        }
+    }
+
     private static func makeScript(from meta: ScriptMetadata,
                                    source: String,
                                    downloadURL: String) -> Userscript {
@@ -151,6 +174,7 @@ public struct ScriptsView: View {
     public init() {}
     @StateObject private var vm = ScriptsViewModel()
     @State private var extTick = 0
+    @State private var editing: Userscript?
 
     public var body: some View {
         List {
@@ -173,6 +197,11 @@ public struct ScriptsView: View {
             ToolbarItem(placement: .topBarTrailing) { EditButton() }
         }
         .onAppear { vm.reload() }
+        .sheet(item: $editing) { script in
+            ScriptEditorView(script: script) { newSource in
+                Task { await vm.saveEdit(script, source: newSource) }
+            }
+        }
     }
 
     /// Bundled WebExtensions (ReTorn) with an on/off switch. Toggling persists to
@@ -223,7 +252,8 @@ public struct ScriptsView: View {
                     script: script,
                     updateAvailable: vm.updatesAvailable.contains(script.id),
                     onToggle: { vm.setEnabled(script, $0) },
-                    onUpdate: { Task { await vm.update(script) } }
+                    onUpdate: { Task { await vm.update(script) } },
+                    onEdit: { editing = script }
                 )
             }
             .onDelete { idx in
@@ -239,6 +269,7 @@ private struct ScriptRow: View {
     let updateAvailable: Bool
     let onToggle: (Bool) -> Void
     let onUpdate: () -> Void
+    let onEdit: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -246,6 +277,8 @@ private struct ScriptRow: View {
                 Text(script.name).font(.headline)
                 Text("v\(script.version ?? "—")").font(.caption).foregroundStyle(.secondary)
                 Spacer()
+                Button(action: onEdit) { Image(systemName: "pencil") }
+                    .buttonStyle(.borderless)
                 Toggle("", isOn: Binding(get: { script.enabled }, set: onToggle))
                     .labelsHidden()
             }
@@ -266,5 +299,56 @@ private struct ScriptRow: View {
         guard let first = script.matches.first else { return "no @match" }
         let extra = script.matches.count - 1
         return extra > 0 ? "\(first)  +\(extra) more" : first
+    }
+}
+
+/// Full-screen-ish source editor for a userscript. Edits the raw text and saves
+/// it back; validates the `// ==UserScript==` block parses before saving so a
+/// broken metadata block can't brick the script.
+private struct ScriptEditorView: View {
+    @Environment(\.dismiss) private var dismiss
+    private let title: String
+    private let onSave: (String) -> Void
+    @State private var text: String
+    @State private var error: String?
+
+    init(script: Userscript, onSave: @escaping (String) -> Void) {
+        self.title = script.name
+        self.onSave = onSave
+        _text = State(initialValue: script.source)
+    }
+
+    var body: some View {
+        NavigationStack {
+            TextEditor(text: $text)
+                .font(.system(size: 12, design: .monospaced))
+                .autocorrectionDisabled(true)
+                .textInputAutocapitalization(.never)
+                .overlay(alignment: .bottom) {
+                    if let error {
+                        Text(error)
+                            .font(.caption).foregroundStyle(.white)
+                            .padding(8).background(.red, in: RoundedRectangle(cornerRadius: 8))
+                            .padding(.bottom, 8)
+                    }
+                }
+                .navigationTitle(title)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button("Cancel") { dismiss() }
+                    }
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("Save") {
+                            do { _ = try MetadataParser.parse(text) }
+                            catch {
+                                error = "The // ==UserScript== block has an error — fix it before saving."
+                                return
+                            }
+                            onSave(text); dismiss()
+                        }
+                    }
+                }
+        }
     }
 }
