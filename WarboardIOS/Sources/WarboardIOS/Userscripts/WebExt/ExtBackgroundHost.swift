@@ -9,13 +9,15 @@ import WebKit
 /// background's `onMessage` handlers and returns the reply.
 final class ExtBackgroundHost: NSObject, WKNavigationDelegate {
     private var webView: WKWebView?
+    private let id: String
     private let relay: ExtMessageRelay
     private let version: String
     private let storage: ExtStorage
     private var isReady = false
     private var readyWaiters: [CheckedContinuation<Void, Never>] = []
 
-    init(relay: ExtMessageRelay, version: String, storage: ExtStorage) {
+    init(id: String, relay: ExtMessageRelay, version: String, storage: ExtStorage) {
+        self.id = id
         self.relay = relay
         self.version = version
         self.storage = storage
@@ -29,17 +31,17 @@ final class ExtBackgroundHost: NSObject, WKNavigationDelegate {
         config.setURLSchemeHandler(ExtResourceScheme(), forURLScheme: ExtResourceScheme.scheme)
         relay.register(on: config.userContentController, world: .page)
 
-        let head = "window.__webext_version=\(jsString(version));"
+        let head = "window.__webext_id=\(jsString(id));window.__webext_version=\(jsString(version));"
         config.userContentController.addUserScript(docStart(head + WebExtShimJS.source))
         config.userContentController.addUserScript(docStart(WebExtBgFetchJS.source))
-        if let bg = Self.bundled("_background.js") {
+        if let bg = bundled("_background.js") {
             config.userContentController.addUserScript(docStart(bg))
         }
 
         let wv = WKWebView(frame: .zero, configuration: config)
         wv.navigationDelegate = self
         webView = wv
-        if let url = URL(string: "\(ExtResourceScheme.scheme)://retorn/_bg.html") {
+        if let url = URL(string: "\(ExtResourceScheme.scheme)://\(id)/_bg.html") {
             wv.load(URLRequest(url: url))
         }
     }
@@ -64,12 +66,12 @@ final class ExtBackgroundHost: NSObject, WKNavigationDelegate {
             // An NSNull/empty reply means the bg's onMessage produced no response
             // — ReTorn then crashes on `r.status`. Log which message hit it.
             if result is NSNull {
-                WebDiag.log("webext-dispatch-null", ["name": name, "ready": isReady])
+                WebDiag.log("webext-dispatch-null", ["id": id, "name": name, "ready": isReady])
             }
             return result
         } catch {
             ExtCrashDiag.breadcrumb("dispatch:err:\(name)")
-            WebDiag.log("webext-dispatch-throw", ["name": name, "error": "\(error)"])
+            WebDiag.log("webext-dispatch-throw", ["id": id, "name": name, "error": "\(error)"])
             return nil
         }
     }
@@ -90,8 +92,8 @@ final class ExtBackgroundHost: NSObject, WKNavigationDelegate {
     /// on `r.status`. Reload it so it recovers on the next message.
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         isReady = false
-        WebDiag.log("webext-bg-terminated", [:])
-        if let url = URL(string: "\(ExtResourceScheme.scheme)://retorn/_bg.html") {
+        WebDiag.log("webext-bg-terminated", ["id": id])
+        if let url = URL(string: "\(ExtResourceScheme.scheme)://\(id)/_bg.html") {
             webView.load(URLRequest(url: url))
         }
     }
@@ -111,7 +113,7 @@ final class ExtBackgroundHost: NSObject, WKNavigationDelegate {
             if let value = try? await webView.callAsyncJavaScript(
                 probe, arguments: [:], in: nil, contentWorld: .page),
                let json = value as? String {
-                WebDiag.log("webext-bg-health", ["state": json])
+                WebDiag.log("webext-bg-health", ["id": self.id, "state": json])
             }
         }
     }
@@ -160,9 +162,9 @@ final class ExtBackgroundHost: NSObject, WKNavigationDelegate {
         return "'\(escaped)'"
     }
 
-    static func bundled(_ name: String) -> String? {
+    private func bundled(_ name: String) -> String? {
         guard let base = Bundle.main.resourceURL,
-              let data = try? Data(contentsOf: base.appendingPathComponent("retorn/\(name)")),
+              let data = try? Data(contentsOf: base.appendingPathComponent("\(id)/\(name)")),
               let s = String(data: data, encoding: .utf8) else { return nil }
         return s
     }

@@ -1,30 +1,26 @@
 import Foundation
 
 /// Backs `browser.storage.{local,sync,session}` over App-Group UserDefaults,
-/// namespaced `webext.retorn.<area>.<key>`. `sync` collapses to local (no
-/// cross-device sync on iOS); `session` is local too (cleared keys can be
-/// pruned later — Phase 1 keeps it simple). `set`/`remove` return accurate
-/// old/new change records so the Phase-3 notification engine can diff them.
+/// namespaced `webext.<extId>.<area>.<key>` so multiple bundled extensions don't
+/// collide. `sync` collapses to local (no cross-device sync on iOS); `session`
+/// is local too. `set`/`remove` return accurate old/new change records so the
+/// notification engine can diff them.
 ///
-/// Values are stored as JSON `Data`, NOT as raw objects. The Torn `/user/`
-/// blob ReTorn caches (`re_user_data`) is full of JSON `null`s, which bridge to
-/// `NSNull`. `UserDefaults.set(_:forKey:)` only accepts property-list types,
-/// and `NSNull` is not one — storing a null-containing dict raises an
-/// uncatchable `NSInvalidArgumentException` ("Attempt to insert non-property-
-/// list object") and crashes the app. Encoding to JSON Data accepts every
-/// WKScriptMessage value type (including `null`) and round-trips faithfully.
+/// Values are stored as JSON `Data`, NOT raw objects: a blob containing JSON
+/// `null` (→ `NSNull`) would raise an uncatchable `NSInvalidArgumentException`
+/// from `UserDefaults.set` (NSNull isn't a property-list type). JSON encoding
+/// accepts every WKScriptMessage value type and round-trips faithfully.
 final class ExtStorage {
     private let defaults: UserDefaults
+    private let id: String
 
-    init(defaults: UserDefaults = UserDefaults(suiteName: "group.com.tornwar.warboard") ?? .standard) {
+    init(id: String, defaults: UserDefaults = UserDefaults(suiteName: "group.com.tornwar.warboard") ?? .standard) {
+        self.id = id
         self.defaults = defaults
     }
 
-    private static func prefix(_ area: String) -> String { "webext.retorn.\(area)." }
+    private func prefix(_ area: String) -> String { "webext.\(id).\(area)." }
 
-    /// Wrap in a 1-element array so top-level fragments (string/number/bool/null)
-    /// are always valid JSON roots; `decode` unwraps. Returns nil only for values
-    /// JSONSerialization can't represent (none of the WKScriptMessage types).
     private static func encode(_ v: Any) -> Data? {
         try? JSONSerialization.data(withJSONObject: [v], options: [])
     }
@@ -36,10 +32,8 @@ final class ExtStorage {
         return arr.first
     }
 
-    /// Read + decode a single key, with a legacy fallback for values that may
-    /// have been stored raw by an earlier build.
     private func read(_ area: String, _ key: String) -> Any? {
-        let full = Self.prefix(area) + key
+        let full = prefix(area) + key
         if let data = defaults.data(forKey: full), let value = Self.decode(data) {
             return value
         }
@@ -49,7 +43,7 @@ final class ExtStorage {
     /// `keys` may be null (all in area), a String, an array of Strings, or a
     /// dict of key→default. Returns the resolved values.
     func get(area: String, keys: Any?) -> [String: Any] {
-        let p = Self.prefix(area)
+        let p = prefix(area)
         var result: [String: Any] = [:]
 
         if keys == nil || keys is NSNull {
@@ -70,7 +64,7 @@ final class ExtStorage {
     /// Stores each item as JSON Data; returns `{key: {oldValue, newValue}}`.
     @discardableResult
     func set(area: String, items: [String: Any]) -> [String: [String: Any]] {
-        let p = Self.prefix(area)
+        let p = prefix(area)
         var changes: [String: [String: Any]] = [:]
         for (k, v) in items {
             let old = read(area, k)
@@ -84,7 +78,7 @@ final class ExtStorage {
 
     @discardableResult
     func remove(area: String, keys: Any?) -> [String: [String: Any]] {
-        let p = Self.prefix(area)
+        let p = prefix(area)
         let list: [String] = (keys as? String).map { [$0] } ?? (keys as? [String]) ?? []
         var changes: [String: [String: Any]] = [:]
         for k in list {
@@ -96,7 +90,7 @@ final class ExtStorage {
     }
 
     func clear(area: String) {
-        let p = Self.prefix(area)
+        let p = prefix(area)
         for (full, _) in defaults.dictionaryRepresentation() where full.hasPrefix(p) {
             defaults.removeObject(forKey: full)
         }
@@ -104,7 +98,7 @@ final class ExtStorage {
 
     /// The stored version marker, for install-vs-update synthesis.
     var storedVersion: String? {
-        get { defaults.string(forKey: "webext.retorn.__version") }
-        set { defaults.set(newValue, forKey: "webext.retorn.__version") }
+        get { defaults.string(forKey: "webext.\(id).__version") }
+        set { defaults.set(newValue, forKey: "webext.\(id).__version") }
     }
 }

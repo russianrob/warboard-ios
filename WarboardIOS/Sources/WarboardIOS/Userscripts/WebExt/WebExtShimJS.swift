@@ -81,14 +81,14 @@ enum WebExtShimJS {
       var api = {
         __wbExt: true,
         runtime: {
-          id: 'retorn-webext',
+          id: (window.__webext_id || 'retorn'),
           lastError: null,
           sendMessage: function (msg, cb) { return cbWrap(post({ kind: 'sendMessage', message: msg }), cb); },
           onMessage: event('message'),
           onInstalled: event('installed'),
           onStartup: { addListener: function () {} },
           connect: function () { return { onMessage: { addListener: function () {} }, postMessage: function () {}, disconnect: function () {} }; },
-          getURL: function (p) { return 'webext://retorn/' + String(p || '').replace(/^\//, ''); },
+          getURL: function (p) { return 'webext://' + (window.__webext_id || 'retorn') + '/' + String(p || '').replace(/^\//, ''); },
           getManifest: function () { return { manifest_version: 3, version: (window.__webext_version || '0') }; },
           openOptionsPage: function (cb) { post({ kind: 'openExtPage', page: 'options' }); if (typeof cb === 'function') cb(); }
         },

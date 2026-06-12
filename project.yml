@@ -53,6 +53,8 @@ targets:
       # browser.runtime.getURL() via webext://retorn/<path>.
       - path: WarboardIOS/Resources/retorn
         type: folder
+      - path: WarboardIOS/Resources/torntools
+        type: folder
     dependencies:
       - target: WarboardIOS
       - target: ChainWidget

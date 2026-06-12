@@ -33,10 +33,11 @@ struct ExtManifest: Decodable {
         jsPath.hasPrefix("/") ? String(jsPath.dropFirst()) : jsPath
     }
 
-    /// Loads the bundled ReTorn manifest from the app bundle (`retorn/manifest.json`).
-    static func loadReTorn() -> ExtManifest? {
+    /// Loads a bundled extension's manifest from `<id>/manifest.json` in the app
+    /// bundle (the resource folder is named after the extension id).
+    static func load(id: String) -> ExtManifest? {
         guard let base = Bundle.main.resourceURL else { return nil }
-        let url = base.appendingPathComponent("retorn/manifest.json")
+        let url = base.appendingPathComponent("\(id)/manifest.json")
         guard let data = try? Data(contentsOf: url),
               let manifest = try? JSONDecoder().decode(ExtManifest.self, from: data)
         else { return nil }

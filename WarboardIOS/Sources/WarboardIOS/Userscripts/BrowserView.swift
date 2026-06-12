@@ -316,6 +316,15 @@ public struct BrowserView: View {
                     .keyboardType(.URL)
                     .submitLabel(.go)
                     .focused($addrFocused)
+                    // Tapping the bar selects the whole URL (Safari-style) so you
+                    // can type over it or clear it with one delete — no holding.
+                    .onChange(of: addrFocused) { _, focused in
+                        guard focused else { return }
+                        DispatchQueue.main.async {
+                            UIApplication.shared.sendAction(
+                                #selector(UIResponder.selectAll(_:)), to: nil, from: nil, for: nil)
+                        }
+                    }
                     .onSubmit { model.go(); addrFocused = false }
                     .opacity(addrFocused ? 1 : 0)
                 if !addrFocused {
@@ -339,8 +348,13 @@ public struct BrowserView: View {
                 if !focused { model.urlText = model.displayURL }
             }
 
-            Button(action: model.reload) {
-                Image(systemName: model.isLoading ? "xmark" : "arrow.clockwise")
+            // Jump to the Torn home page. (Reload is still available via
+            // pull-to-refresh on the page.)
+            Button {
+                model.urlText = "https://www.torn.com/"
+                model.go()
+            } label: {
+                Image(systemName: "house.fill")
             }
 
             // Native War Room (live targets / FF / online / hospital).

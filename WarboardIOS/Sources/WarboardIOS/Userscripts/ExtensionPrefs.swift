@@ -24,4 +24,9 @@ final class ExtensionPrefs {
     func setEnabled(_ id: String, _ enabled: Bool) {
         defaults.set(enabled, forKey: key(id))
     }
+
+    /// Whether the user (or a first-run default) has ever set this extension's flag.
+    func hasExplicitSetting(_ id: String) -> Bool {
+        defaults.object(forKey: key(id)) != nil
+    }
 }
