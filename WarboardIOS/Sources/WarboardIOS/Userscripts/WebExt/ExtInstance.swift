@@ -149,7 +149,25 @@ final class ExtInstance {
         config.userContentController.addUserScript(WKUserScript(
             source: header + WebExtShimJS.source + ExtPageExtrasJS.source,
             injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        if debug {
+            config.userContentController.addUserScript(WKUserScript(
+                source: pageDiagJS, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        }
         return config
+    }
+
+    /// Captures uncaught errors/rejections on a visible extension PAGE (options/
+    /// popup) → relay `kind:'diag'` with `where:'page'`, so a blank options page
+    /// reports why instead of failing silently. Debug extensions only.
+    private var pageDiagJS: String {
+        """
+        (function(){
+          function p(o){ try{ window.webkit.messageHandlers.webextBridge.postMessage(Object.assign({kind:'diag',ext:'\(id)',where:'page'},o)); }catch(e){} }
+          p({stage:'page-setup', ver:(window.__webext_version||'?'), url:String(location.pathname)});
+          window.addEventListener('error', function(e){ p({stage:'onerror', msg:String(e.message||'')+' @ '+String(e.filename||'').split('/').pop()+':'+(e.lineno||0)+':'+(e.colno||0)}); }, true);
+          window.addEventListener('unhandledrejection', function(e){ var r=e&&e.reason; p({stage:'rejection', msg:String((r&&r.message)||r||'').slice(0,200)}); });
+        })();
+        """
     }
 
     // MARK: - helpers
