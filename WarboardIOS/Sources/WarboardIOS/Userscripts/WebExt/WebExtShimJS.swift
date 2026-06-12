@@ -48,6 +48,9 @@ enum WebExtShimJS {
         for (var i = 0; i < arr.length; i++) { try { arr[i](details); } catch (e) {} }
       };
 
+      // Health probe (native diagnostics): how many onMessage listeners registered.
+      window.__webext_listenerCount = function () { return listeners.message.length; };
+
       // Background host: run onMessage listeners for a relayed message and
       // resolve the reply, honoring the `return true` deferred-async pattern.
       window.__webext_handleMessage = function (msg, sender) {

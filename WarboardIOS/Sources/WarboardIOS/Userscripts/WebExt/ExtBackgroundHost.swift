@@ -61,9 +61,15 @@ final class ExtBackgroundHost: NSObject, WKNavigationDelegate {
                 in: nil,
                 contentWorld: .page)
             ExtCrashDiag.breadcrumb("dispatch:ret:\(name)")
+            // An NSNull/empty reply means the bg's onMessage produced no response
+            // — ReTorn then crashes on `r.status`. Log which message hit it.
+            if result is NSNull {
+                WebDiag.log("webext-dispatch-null", ["name": name, "ready": isReady])
+            }
             return result
         } catch {
             ExtCrashDiag.breadcrumb("dispatch:err:\(name)")
+            WebDiag.log("webext-dispatch-throw", ["name": name, "error": "\(error)"])
             return nil
         }
     }
@@ -76,6 +82,38 @@ final class ExtBackgroundHost: NSObject, WKNavigationDelegate {
         readyWaiters.removeAll()
         for w in waiters { w.resume() }
         maybeFireInstalled()
+        logHealth(webView)
+    }
+
+    /// The hidden bg webview runs in its own content process; if it crashes
+    /// (memory, a JS fault) every later dispatch returns nil and ReTorn breaks
+    /// on `r.status`. Reload it so it recovers on the next message.
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        isReady = false
+        WebDiag.log("webext-bg-terminated", [:])
+        if let url = URL(string: "\(ExtResourceScheme.scheme)://retorn/_bg.html") {
+            webView.load(URLRequest(url: url))
+        }
+    }
+
+    /// One-shot probe after load: is the runtime actually live in the bg host
+    /// (shim + handleMessage present, _background.js's onMessage listener
+    /// registered)? Pinpoints a broken/undefined reply path.
+    private func logHealth(_ webView: WKWebView) {
+        let probe = """
+        return JSON.stringify({
+          browser: !!window.browser,
+          handleMessage: typeof window.__webext_handleMessage,
+          listeners: (window.__webext_listenerCount ? window.__webext_listenerCount() : -1)
+        });
+        """
+        Task { @MainActor in
+            if let value = try? await webView.callAsyncJavaScript(
+                probe, arguments: [:], in: nil, contentWorld: .page),
+               let json = value as? String {
+                WebDiag.log("webext-bg-health", ["state": json])
+            }
+        }
     }
 
     /// Fire ReTorn's `onInstalled` on first run / version change so its
