@@ -1,26 +1,29 @@
 import SwiftUI
 import WebKit
 
-/// Renders a visible ReTorn extension page (options / popup) from
-/// `webext://retorn/<page>` in a WKWebView wired to the runtime's shim + relay,
-/// so the page's `browser.storage`/`sendMessage` calls hit the same storage and
-/// background host as the rest of the runtime. Presented as a full-screen sheet
-/// by the app; supplies its own Done button (matches WarRoomView/ManagerView).
+/// Renders a visible extension page (options / popup) from
+/// `webext://<extId>/<page>` in a WKWebView wired to THAT extension's shim +
+/// relay + storage, so the page's `browser.storage`/`sendMessage` calls hit the
+/// same storage and background host as the rest of the runtime. Presented as a
+/// full-screen sheet by the app; supplies its own Done button.
 public struct ExtPageView: View {
     @Environment(\.dismiss) private var dismiss
+    private let extId: String
     private let page: String
     private let title: String
 
     /// - Parameters:
-    ///   - page: bundle-relative page path, e.g. `"pages/options.html"`.
+    ///   - extId: the bundled extension id (resource folder / `webext://` host).
+    ///   - page: bundle-relative page path, e.g. `"options.html"`.
     ///   - title: navigation bar title.
-    public init(page: String, title: String) {
+    public init(extId: String = ExtensionRuntime.retornID, page: String, title: String) {
+        self.extId = extId
         self.page = page
         self.title = title
     }
 
     public var body: some View {
-        ExtPageWebView(page: page)
+        ExtPageWebView(extId: extId, page: page)
             .ignoresSafeArea(edges: .bottom)
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
@@ -33,13 +36,14 @@ public struct ExtPageView: View {
 }
 
 private struct ExtPageWebView: UIViewRepresentable {
+    let extId: String
     let page: String
 
     func makeUIView(context: Context) -> WKWebView {
-        let config = ExtensionRuntime.shared.makeExtensionPageConfig()
+        let config = ExtensionRuntime.shared.makeExtensionPageConfig(for: extId)
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.allowsBackForwardNavigationGestures = false
-        if let url = URL(string: "\(ExtResourceScheme.scheme)://retorn/\(page)") {
+        if let url = URL(string: "\(ExtResourceScheme.scheme)://\(extId)/\(page)") {
             webView.load(URLRequest(url: url))
         }
         return webView

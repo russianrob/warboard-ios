@@ -18,6 +18,16 @@ final class ExtensionRuntime {
         let name: String
         let version: String
         let attribution: String
+        /// Bundle-relative options page (from `options_ui.page`), or nil.
+        let optionsPage: String?
+    }
+
+    /// A presentable extension options page: which extension, which page, title.
+    struct ExtOptionsTarget: Identifiable, Equatable {
+        let extId: String
+        let page: String
+        let title: String
+        var id: String { extId }
     }
 
     private let instances: [ExtInstance]
@@ -50,9 +60,32 @@ final class ExtensionRuntime {
         didSet { instances.forEach { $0.relay.onOpenURL = onOpenURL } }
     }
 
-    /// `runtime.openOptionsPage` → present an extension page. Forwarded to every relay.
-    var onOpenExtPage: ((String) -> Void)? {
-        didSet { instances.forEach { $0.relay.onOpenExtPage = onOpenExtPage } }
+    /// `runtime.openOptionsPage` → present an extension page. The app receives
+    /// `(extensionId, page)` so it knows WHICH extension's options to show; each
+    /// relay injects its own extension id.
+    var onOpenExtPage: ((String, String) -> Void)? {
+        didSet {
+            for inst in instances {
+                let extId = inst.id
+                inst.relay.onOpenExtPage = { [weak self] page in self?.onOpenExtPage?(extId, page) }
+            }
+        }
+    }
+
+    /// The options target for an extension (nil if it's not bundled or declares
+    /// no options page).
+    func optionsTarget(for id: String) -> ExtOptionsTarget? {
+        guard let inst = instance(id), let page = inst.info.optionsPage else { return nil }
+        return ExtOptionsTarget(extId: id, page: page, title: "\(inst.name) Options")
+    }
+
+    /// Options targets for every ENABLED extension that exposes an options page
+    /// (drives the ⋯ menu's per-extension options entries).
+    var optionsTargets: [ExtOptionsTarget] {
+        instances.compactMap { inst in
+            guard ExtensionPrefs.shared.isEnabled(inst.id), let page = inst.info.optionsPage else { return nil }
+            return ExtOptionsTarget(extId: inst.id, page: page, title: "\(inst.name) Options")
+        }
     }
 
     /// Register each extension's relay (in its own content world) + start its

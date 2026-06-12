@@ -28,7 +28,8 @@ final class ExtInstance {
 
     var isEnabled: Bool { ExtensionPrefs.shared.isEnabled(id) }
     var info: ExtensionRuntime.ExtensionInfo {
-        .init(id: id, name: name, version: manifest.version, attribution: attribution)
+        .init(id: id, name: name, version: manifest.version, attribution: attribution,
+              optionsPage: manifest.optionsPage)
     }
     private var world: WKContentWorld { .world(name: id) }
 

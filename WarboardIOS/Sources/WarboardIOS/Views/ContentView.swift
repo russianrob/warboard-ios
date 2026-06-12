@@ -14,7 +14,7 @@ struct ContentView: View {
     @State private var pickerFaction = false
     @State private var showWarRoom = false
     @State private var showOCManager = false
-    @State private var showExtOptions = false
+    @State private var extOptionsTarget: ExtensionRuntime.ExtOptionsTarget?
     @StateObject private var quickItems = QuickItemsStore()
 
     var body: some View {
@@ -28,7 +28,7 @@ struct ContentView: View {
             onShowNotifications: { showNotifications = true },
             onShowWarRoom: { showWarRoom = true },
             onShowOCManager: { showOCManager = true },
-            onShowExtOptions: { showExtOptions = true }
+            onShowExtOptions: { extOptionsTarget = $0 }
         )
         // App-wide shout banner — listens to RealtimeClient.globalToast
         // so a broadcast surfaces over the browser.
@@ -45,8 +45,8 @@ struct ContentView: View {
         .fullScreenCover(isPresented: $showOCManager) {
             NavigationStack { ManagerView() }
         }
-        .fullScreenCover(isPresented: $showExtOptions) {
-            NavigationStack { ExtPageView(page: "pages/options.html", title: "ReTorn Options") }
+        .fullScreenCover(item: $extOptionsTarget) { target in
+            NavigationStack { ExtPageView(extId: target.extId, page: target.page, title: target.title) }
         }
     }
 }

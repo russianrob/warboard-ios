@@ -6,6 +6,13 @@ import Foundation
 struct ExtManifest: Decodable {
     let version: String
     let contentScripts: [ContentScript]
+    let optionsUI: OptionsUI?
+
+    /// The extension's options page, bundle-relative (leading slash stripped),
+    /// or nil if the extension declares no `options_ui`.
+    var optionsPage: String? { optionsUI?.page.map(ExtManifest.normalized) }
+
+    struct OptionsUI: Decodable { let page: String? }
 
     struct ContentScript: Decodable {
         let matches: [String]
@@ -26,6 +33,7 @@ struct ExtManifest: Decodable {
     enum CodingKeys: String, CodingKey {
         case version
         case contentScripts = "content_scripts"
+        case optionsUI = "options_ui"
     }
 
     /// Strip a single leading slash so every path is bundle-relative to `retorn/`.

@@ -199,9 +199,10 @@ public struct BrowserView: View {
     private let onShowWarRoom: (() -> Void)?
     /// Opens the app's native OC Manager (same framework→app closure pattern).
     private let onShowOCManager: (() -> Void)?
-    /// Presents ReTorn's options page in a sheet. The ⋯ menu item and the
-    /// in-page "Options" button (runtime.openOptionsPage) both route here.
-    private let onShowExtOptions: (() -> Void)?
+    /// Presents an extension's options page in a sheet, for the extension that
+    /// asked. The ⋯ menu items and the in-page "Options" button
+    /// (runtime.openOptionsPage) both route here.
+    private let onShowExtOptions: ((ExtensionRuntime.ExtOptionsTarget) -> Void)?
     /// Two quick-item lists (persisted/edited by the app target): `personalItems`
     /// for the Items page, `factionItems` for the faction armoury.
     /// `onEditQuickItems` opens the app's picker for the relevant list — its Bool
@@ -215,7 +216,7 @@ public struct BrowserView: View {
                 onShowNotifications: (() -> Void)? = nil,
                 onShowWarRoom: (() -> Void)? = nil,
                 onShowOCManager: (() -> Void)? = nil,
-                onShowExtOptions: (() -> Void)? = nil) {
+                onShowExtOptions: ((ExtensionRuntime.ExtOptionsTarget) -> Void)? = nil) {
         self.personalItems = personalItems
         self.factionItems = factionItems
         self.onEditQuickItems = onEditQuickItems
@@ -284,11 +285,13 @@ public struct BrowserView: View {
             model.reload()
         }
         .onAppear {
-            // Route ReTorn's in-page "Options" button (runtime.openOptionsPage →
-            // openExtPage) to the same sheet the ⋯ menu opens — but only while the
-            // extension is enabled (off means off).
-            ExtensionRuntime.shared.onOpenExtPage = { _ in
-                if ExtensionPrefs.shared.isEnabled(ExtensionRuntime.retornID) { onShowExtOptions?() }
+            // Route an extension's in-page "Options" button (runtime.openOptionsPage
+            // → openExtPage) to the options sheet — for the extension that asked,
+            // and only while it's enabled (off means off).
+            ExtensionRuntime.shared.onOpenExtPage = { extId, _ in
+                guard ExtensionPrefs.shared.isEnabled(extId),
+                      let target = ExtensionRuntime.shared.optionsTarget(for: extId) else { return }
+                onShowExtOptions?(target)
             }
         }
     }
@@ -389,9 +392,11 @@ public struct BrowserView: View {
                     Label(controller.devToolsEnabled ? "Dev Tools: On" : "Dev Tools",
                           systemImage: controller.devToolsEnabled ? "ladybug.fill" : "ladybug")
                 }
-                if let onShowExtOptions, ExtensionPrefs.shared.isEnabled(ExtensionRuntime.retornID) {
-                    Button { onShowExtOptions() } label: {
-                        Label("ReTorn Options…", systemImage: "puzzlepiece.extension")
+                if let onShowExtOptions {
+                    ForEach(ExtensionRuntime.shared.optionsTargets) { target in
+                        Button { onShowExtOptions(target) } label: {
+                            Label("\(target.title)…", systemImage: "puzzlepiece.extension")
+                        }
                     }
                 }
                 Divider()
