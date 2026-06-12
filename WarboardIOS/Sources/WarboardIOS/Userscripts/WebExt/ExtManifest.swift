@@ -9,14 +9,17 @@ struct ExtManifest: Decodable {
 
     struct ContentScript: Decodable {
         let matches: [String]
+        let excludeMatches: [String]?
         let runAt: String?
         /// Ordered JS file paths; may be bundle-absolute ("/lib/x.js") or
         /// extension-relative ("js/foo.js"). Normalize with `normalized(_:)`.
-        let js: [String]
+        let js: [String]?
+        let css: [String]?
 
         enum CodingKeys: String, CodingKey {
-            case matches, js
+            case matches, js, css
             case runAt = "run_at"
+            case excludeMatches = "exclude_matches"
         }
     }
 

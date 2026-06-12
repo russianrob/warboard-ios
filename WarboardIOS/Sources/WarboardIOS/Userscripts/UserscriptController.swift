@@ -84,6 +84,14 @@ final class UserscriptController: NSObject, ObservableObject {
         gmBridge.onRegisterMenuCommand = { [weak self] _, name, id in
             Task { @MainActor in self?.addMenuCommand(name: name, id: id) }
         }
+
+        // WebExtension runtime: register the relay on this config + start the
+        // hidden background host; route browser.tabs.create into this browser.
+        ExtensionRuntime.shared.install(on: config)
+        ExtensionRuntime.shared.onOpenURL = { [weak self] urlString in
+            guard let self, let url = URL(string: urlString) else { return }
+            Task { @MainActor in self.webView?.load(URLRequest(url: url)) }
+        }
     }
 
     /// Convenience for SwiftUI hosts: build a controller from the default,
@@ -161,6 +169,13 @@ final class UserscriptController: NSObject, ObservableObject {
                 forMainFrameOnly: p.mainFrameOnly,
                 in: .page                       // MAIN world: unsafeWindow === window
             )
+            userContent.addUserScript(ws)
+        }
+
+        // 6. WebExtension (ReTorn) content scripts for this URL, injected into
+        //    the isolated "retorn" content world so ReTorn's bundled jQuery
+        //    stack stays off Torn's page and the userscripts above.
+        for ws in ExtensionRuntime.shared.contentWorldScripts(for: url) {
             userContent.addUserScript(ws)
         }
     }
