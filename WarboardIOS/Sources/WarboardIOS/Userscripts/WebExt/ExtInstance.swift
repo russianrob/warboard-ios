@@ -14,7 +14,7 @@ final class ExtInstance {
     /// If set, this extension's files are fetched from the warboard server (this
     /// version.json URL) by `RemoteExtStore`; the bundled copy is the seed.
     let remoteSource: URL?
-    let manifest: ExtManifest
+    var manifest: ExtManifest
     let storage: ExtStorage
     let relay: ExtMessageRelay
     let backgroundHost: ExtBackgroundHost
@@ -62,6 +62,16 @@ final class ExtInstance {
     }
 
     func startIfEnabled() { if isEnabled { backgroundHost.start() } }
+
+    /// Re-read this extension's manifest from the (post-invalidate) container so
+    /// `info.version`, the injection `header`, and the content-script list all
+    /// reflect a freshly-installed update. Syncs the bg host's version too.
+    func reloadManifest() {
+        if let m = ExtManifest.load(id: id) {
+            manifest = m
+            backgroundHost.updateVersion(m.version)
+        }
+    }
 
     /// Shim + matching content scripts (+ CSS) for `url`, in this extension's world.
     func contentWorldScripts(for url: URL) -> [WKUserScript] {
