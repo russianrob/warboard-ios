@@ -53,13 +53,8 @@ final class ExtensionRuntime {
             ExtensionPrefs.shared.setEnabled("torntools", false)
         }
 
-        // Silent background check for newer server copies of remote-sourced
-        // extensions. Applies on the NEXT launch (this session's containerBase
-        // is already fixed). Capture value-type (id, URL) pairs, not self.
-        let remote = instances.compactMap { inst in inst.remoteSource.map { (inst.id, $0) } }
-        Task.detached(priority: .utility) {
-            for (id, src) in remote { await RemoteExtStore.shared.checkAndFetch(id: id, source: src) }
-        }
+        // Updates are user-driven now (no silent at-launch download): the Scripts
+        // screen + browser badge call checkExtensionUpdate / installExtensionUpdate.
 
         // storage.onChanged: a write in ANY context broadcasts to the background
         // world AND the page content world, so listeners react live. Without this
@@ -128,6 +123,37 @@ final class ExtensionRuntime {
     func setExtensionEnabled(_ id: String, _ enabled: Bool) {
         ExtensionPrefs.shared.setEnabled(id, enabled)
         if enabled { instance(id)?.startIfEnabled() }
+    }
+
+    /// Cheap update check for one remote-sourced extension (nil if not remote or
+    /// up to date). Drives `ExtensionUpdateStore`.
+    func checkExtensionUpdate(id: String) async -> String? {
+        guard let inst = instance(id), let src = inst.remoteSource else { return nil }
+        return await RemoteExtStore.shared.checkForUpdate(id: id, source: src)
+    }
+
+    /// Download + install the newest server copy, then hot-swap it in. Returns
+    /// the new version. Throws on download failure (nothing applied).
+    func installExtensionUpdate(id: String) async throws -> String {
+        guard let inst = instance(id), let src = inst.remoteSource else {
+            throw RemoteExtStore.RemoteExtError.badSource
+        }
+        let newVersion = try await RemoteExtStore.shared.installUpdate(id: id, source: src)
+        await reloadExtension(id: id)
+        return newVersion
+    }
+
+    /// Apply a freshly-installed update live: reload the manifest, restart the
+    /// background host (re-runs `_background.js` + fires onInstalled→migrate), and
+    /// post `.userscriptsDidChange` so the page reloads and re-injects the new
+    /// content scripts. The cache is already updated, so even if this is a no-op a
+    /// relaunch applies cleanly.
+    @MainActor
+    func reloadExtension(id: String) {
+        guard let inst = instance(id) else { return }
+        inst.reloadManifest()
+        inst.backgroundHost.restart()
+        NotificationCenter.default.post(name: .userscriptsDidChange, object: nil)
     }
 
     /// Content-world scripts for every enabled extension that matches `url`.
