@@ -11,6 +11,9 @@ final class ExtInstance {
     let id: String
     let name: String
     let attribution: String
+    /// If set, this extension's files are fetched from the warboard server (this
+    /// version.json URL) by `RemoteExtStore`; the bundled copy is the seed.
+    let remoteSource: URL?
     let manifest: ExtManifest
     let storage: ExtStorage
     let relay: ExtMessageRelay
@@ -33,12 +36,13 @@ final class ExtInstance {
     }
     private var world: WKContentWorld { .world(name: id) }
 
-    init?(id: String, name: String, attribution: String,
+    init?(id: String, name: String, attribution: String, remoteSource: URL? = nil,
           mainWorldInjects: [String] = [], injectorSuffix: String? = nil, debug: Bool = false) {
         guard let manifest = ExtManifest.load(id: id) else { return nil }
         self.id = id
         self.name = name
         self.attribution = attribution
+        self.remoteSource = remoteSource
         self.manifest = manifest
         self.mainWorldInjects = mainWorldInjects
         self.injectorSuffix = injectorSuffix
@@ -185,8 +189,8 @@ final class ExtInstance {
     }
 
     private func bundledText(_ relativePath: String) -> String? {
-        guard let base = Bundle.main.resourceURL,
-              let data = try? Data(contentsOf: base.appendingPathComponent("\(id)/\(relativePath)")),
+        let base = RemoteExtStore.shared.containerBase(for: id)
+        guard let data = try? Data(contentsOf: base.appendingPathComponent("\(id)/\(relativePath)")),
               let s = String(data: data, encoding: .utf8) else { return nil }
         return s
     }

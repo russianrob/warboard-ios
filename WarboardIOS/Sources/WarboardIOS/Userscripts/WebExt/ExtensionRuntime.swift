@@ -43,13 +43,22 @@ final class ExtensionRuntime {
             ExtInstance(id: "retorn", name: "ReTorn", attribution: "Heasleys4hemp",
                         mainWorldInjects: ["inject/inject_interceptFetch.js"],
                         injectorSuffix: "everywhere/retorn.js"),
-            ExtInstance(id: "torntools", name: "TornTools", attribution: "Mephiles"),
+            ExtInstance(id: "torntools", name: "TornTools", attribution: "Mephiles",
+                        remoteSource: URL(string: "https://tornwar.com/ext/torntools/version.json")),
         ].compactMap { $0 }
 
         // TornTools is bundled but defaults OFF (opt-in) so an untested second
         // extension doesn't disrupt normal browsing until enabled in the manager.
         if !ExtensionPrefs.shared.hasExplicitSetting("torntools") {
             ExtensionPrefs.shared.setEnabled("torntools", false)
+        }
+
+        // Silent background check for newer server copies of remote-sourced
+        // extensions. Applies on the NEXT launch (this session's containerBase
+        // is already fixed). Capture value-type (id, URL) pairs, not self.
+        let remote = instances.compactMap { inst in inst.remoteSource.map { (inst.id, $0) } }
+        Task.detached(priority: .utility) {
+            for (id, src) in remote { await RemoteExtStore.shared.checkAndFetch(id: id, source: src) }
         }
     }
 

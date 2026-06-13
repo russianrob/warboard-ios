@@ -34,9 +34,7 @@ final class ExtResourceScheme: NSObject, WKURLSchemeHandler {
         // webext://retorn/js/gym/gym.js -> host="retorn", path="/js/gym/gym.js"
         // -> bundle/retorn/js/gym/gym.js
         let relative = host + url.path
-        guard let base = Bundle.main.resourceURL else {
-            urlSchemeTask.didFailWithError(URLError(.fileDoesNotExist)); return
-        }
+        let base = RemoteExtStore.shared.containerBase(for: host)
         let fileURL = base.appendingPathComponent(relative)
         guard let data = try? Data(contentsOf: fileURL) else {
             urlSchemeTask.didFailWithError(URLError(.fileDoesNotExist)); return

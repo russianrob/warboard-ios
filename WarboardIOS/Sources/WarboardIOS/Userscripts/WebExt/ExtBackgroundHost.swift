@@ -192,8 +192,8 @@ final class ExtBackgroundHost: NSObject, WKNavigationDelegate {
     }
 
     private func bundled(_ name: String) -> String? {
-        guard let base = Bundle.main.resourceURL,
-              let data = try? Data(contentsOf: base.appendingPathComponent("\(id)/\(name)")),
+        let base = RemoteExtStore.shared.containerBase(for: id)
+        guard let data = try? Data(contentsOf: base.appendingPathComponent("\(id)/\(name)")),
               let s = String(data: data, encoding: .utf8) else { return nil }
         return s
     }

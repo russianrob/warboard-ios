@@ -44,7 +44,7 @@ struct ExtManifest: Decodable {
     /// Loads a bundled extension's manifest from `<id>/manifest.json` in the app
     /// bundle (the resource folder is named after the extension id).
     static func load(id: String) -> ExtManifest? {
-        guard let base = Bundle.main.resourceURL else { return nil }
+        let base = RemoteExtStore.shared.containerBase(for: id)
         let url = base.appendingPathComponent("\(id)/manifest.json")
         guard let data = try? Data(contentsOf: url),
               let manifest = try? JSONDecoder().decode(ExtManifest.self, from: data)
