@@ -139,7 +139,7 @@ final class ExtensionRuntime {
             throw RemoteExtStore.RemoteExtError.badSource
         }
         let newVersion = try await RemoteExtStore.shared.installUpdate(id: id, source: src)
-        await reloadExtension(id: id)
+        await reloadExtension(id: id, version: newVersion)
         return newVersion
     }
 
@@ -149,10 +149,14 @@ final class ExtensionRuntime {
     /// content scripts. The cache is already updated, so even if this is a no-op a
     /// relaunch applies cleanly.
     @MainActor
-    func reloadExtension(id: String) {
+    func reloadExtension(id: String, version: String? = nil) {
         guard let inst = instance(id) else { return }
         inst.reloadManifest()
-        inst.backgroundHost.restart()
+        // Authoritative version from the install — a transient manifest re-read
+        // failure must not desync the bg host's version (→ onInstalled/migration).
+        if let version { inst.backgroundHost.updateVersion(version) }
+        // Never spin up a disabled extension's hidden background webview.
+        if inst.isEnabled { inst.backgroundHost.restart() }
         NotificationCenter.default.post(name: .userscriptsDidChange, object: nil)
     }
 
