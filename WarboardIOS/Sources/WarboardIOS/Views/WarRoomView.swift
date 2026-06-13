@@ -210,7 +210,7 @@ private struct RetaliationTab: View {
             }
             Spacer()
             Button("Attack") {
-                openLink("https://www.torn.com/loader.php?sid=attack&user2ID=\(a.attackerId)")
+                openLink("https://www.torn.com/page.php?sid=attack&user2ID=\(a.attackerId)")
             }
             .buttonStyle(.borderedProminent).controlSize(.small).tint(.red)
         }
@@ -862,7 +862,7 @@ private struct TargetRow: View {
             }
             if target.status.lowercased() == "okay" {
                 Button("Attack") {
-                    openLink("https://www.torn.com/loader.php?sid=attack&user2ID=\(target.id)")
+                    openLink("https://www.torn.com/page.php?sid=attack&user2ID=\(target.id)")
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
