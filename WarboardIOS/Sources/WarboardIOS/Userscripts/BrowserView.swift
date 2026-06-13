@@ -211,6 +211,9 @@ public struct BrowserView: View {
     private let onShowWarRoom: (() -> Void)?
     /// Opens the app's native OC Manager (same framework→app closure pattern).
     private let onShowOCManager: (() -> Void)?
+    /// Opens the app's native War Payouts screen — the most-recent ended
+    /// war's owed cuts (same framework→app closure pattern).
+    private let onShowWarPayouts: (() -> Void)?
     /// Presents an extension's options page in a sheet, for the extension that
     /// asked. The ⋯ menu items and the in-page "Options" button
     /// (runtime.openOptionsPage) both route here.
@@ -228,6 +231,7 @@ public struct BrowserView: View {
                 onShowNotifications: (() -> Void)? = nil,
                 onShowWarRoom: (() -> Void)? = nil,
                 onShowOCManager: (() -> Void)? = nil,
+                onShowWarPayouts: (() -> Void)? = nil,
                 onShowExtOptions: ((ExtOptionsTarget) -> Void)? = nil) {
         self.personalItems = personalItems
         self.factionItems = factionItems
@@ -235,6 +239,7 @@ public struct BrowserView: View {
         self.onShowNotifications = onShowNotifications
         self.onShowWarRoom = onShowWarRoom
         self.onShowOCManager = onShowOCManager
+        self.onShowWarPayouts = onShowWarPayouts
         self.onShowExtOptions = onShowExtOptions
     }
     @StateObject private var model = BrowserModel()
@@ -388,6 +393,13 @@ public struct BrowserView: View {
             if let onShowOCManager {
                 Button { onShowOCManager() } label: {
                     Image(systemName: "briefcase.fill")
+                }
+            }
+
+            // Native War Payouts (most-recent ended war's owed cuts).
+            if let onShowWarPayouts {
+                Button { onShowWarPayouts() } label: {
+                    Image(systemName: "dollarsign.circle")
                 }
             }
 

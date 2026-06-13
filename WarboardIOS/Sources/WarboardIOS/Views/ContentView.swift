@@ -14,6 +14,7 @@ struct ContentView: View {
     @State private var pickerFaction = false
     @State private var showWarRoom = false
     @State private var showOCManager = false
+    @State private var showWarPayouts = false
     @State private var extOptionsTarget: ExtOptionsTarget?
     @StateObject private var quickItems = QuickItemsStore()
 
@@ -28,6 +29,7 @@ struct ContentView: View {
             onShowNotifications: { showNotifications = true },
             onShowWarRoom: { showWarRoom = true },
             onShowOCManager: { showOCManager = true },
+            onShowWarPayouts: { showWarPayouts = true },
             onShowExtOptions: { extOptionsTarget = $0 }
         )
         // App-wide shout banner — listens to RealtimeClient.globalToast
@@ -44,6 +46,9 @@ struct ContentView: View {
         }
         .fullScreenCover(isPresented: $showOCManager) {
             NavigationStack { ManagerView() }
+        }
+        .fullScreenCover(isPresented: $showWarPayouts) {
+            NavigationStack { WarPayoutsView() }
         }
         .fullScreenCover(item: $extOptionsTarget) { target in
             NavigationStack { ExtPageView(extId: target.extId, page: target.page, title: target.title) }

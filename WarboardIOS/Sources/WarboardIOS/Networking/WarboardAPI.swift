@@ -139,6 +139,153 @@ enum WarboardAPI {
         }
     }
 
+    // MARK: War Payouts
+
+    /// One entry from `/api/war/admin-list` — the lightweight war
+    /// summaries the War Payouts screen lists, most-recent ended first.
+    struct PayoutWarSummary: Decodable, Equatable {
+        let warId: String
+        let enemyFactionName: String
+        let warResult: String?
+        let warEndedAt: Int64
+
+        enum CodingKeys: String, CodingKey {
+            case warId, enemyFactionName, warResult, warEndedAt
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            warId = try c.decode(String.self, forKey: .warId)
+            enemyFactionName = try c.decodeIfPresent(String.self, forKey: .enemyFactionName) ?? ""
+            warResult = try c.decodeIfPresent(String.self, forKey: .warResult)
+            // warEndedAt can be a large epoch number — decode as Int64,
+            // tolerating a Double encoding (e.g. epoch-ms with decimals).
+            if let i = try? c.decode(Int64.self, forKey: .warEndedAt) {
+                warEndedAt = i
+            } else {
+                warEndedAt = Int64((try? c.decode(Double.self, forKey: .warEndedAt)) ?? 0)
+            }
+        }
+    }
+
+    private struct PayoutWarListResponse: Decodable {
+        let wars: [PayoutWarSummary]
+    }
+
+    /// One member's owed cut, from `/api/war/<warId>/payouts-admin`.
+    /// `dollarPayout` is decoded as Int64 (money is large; the server
+    /// may encode it as an integer or a JSON double).
+    struct PayoutMember: Decodable, Equatable, Identifiable {
+        let playerId: String
+        let name: String
+        let dollarPayout: Int64
+        let attackCount: Int
+        let sharePct: Double
+
+        var id: String { playerId }
+
+        enum CodingKeys: String, CodingKey {
+            case playerId, name, dollarPayout, attackCount, sharePct
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            playerId = try c.decode(String.self, forKey: .playerId)
+            name = try c.decodeIfPresent(String.self, forKey: .name) ?? "#\(playerId)"
+            dollarPayout = WarboardAPI.decodeInt64(c, .dollarPayout)
+            attackCount = try c.decodeIfPresent(Int.self, forKey: .attackCount) ?? 0
+            sharePct = try c.decodeIfPresent(Double.self, forKey: .sharePct) ?? 0
+        }
+    }
+
+    /// The `dynamic`-mode payout object for one ended war.
+    struct WarPayouts: Decodable, Equatable {
+        let enemyFactionName: String
+        let warResult: String?
+        let lootTotal: Int64
+        let payoutPool: Int64
+        let payoutPct: Double
+        let members: [PayoutMember]
+
+        enum CodingKeys: String, CodingKey {
+            case enemyFactionName, warResult, lootTotal, payoutPool, payoutPct, members
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            enemyFactionName = try c.decodeIfPresent(String.self, forKey: .enemyFactionName) ?? ""
+            warResult = try c.decodeIfPresent(String.self, forKey: .warResult)
+            lootTotal = WarboardAPI.decodeInt64(c, .lootTotal)
+            payoutPool = WarboardAPI.decodeInt64(c, .payoutPool)
+            payoutPct = try c.decodeIfPresent(Double.self, forKey: .payoutPct) ?? 0
+            members = try c.decodeIfPresent([PayoutMember].self, forKey: .members) ?? []
+        }
+
+        /// Memberwise init — used to synthesize an empty placeholder when
+        /// `admin-list` has no ended wars (no member rows → the View's
+        /// "No completed wars yet" empty state).
+        init(enemyFactionName: String = "", warResult: String? = nil,
+             lootTotal: Int64 = 0, payoutPool: Int64 = 0,
+             payoutPct: Double = 0, members: [PayoutMember] = []) {
+            self.enemyFactionName = enemyFactionName
+            self.warResult = warResult
+            self.lootTotal = lootTotal
+            self.payoutPool = payoutPool
+            self.payoutPct = payoutPct
+            self.members = members
+        }
+    }
+
+    /// Decode a money/epoch field that the server may encode either as a
+    /// JSON integer or a JSON double (e.g. `1.23e9`). Falls back to 0.
+    private static func decodeInt64<K: CodingKey>(
+        _ c: KeyedDecodingContainer<K>, _ key: K
+    ) -> Int64 {
+        if let i = try? c.decode(Int64.self, forKey: key) { return i }
+        if let d = try? c.decode(Double.self, forKey: key) { return Int64(d) }
+        return 0
+    }
+
+    /// GET /api/war/admin-list (Bearer) — ended wars this admin can see,
+    /// most-recent ended first. Reuses `OCAPIError` so the View can show
+    /// the same friendly transient / 403 copy the OC Manager uses.
+    static func fetchPayoutWars(baseUrl: String, jwt: String) async throws -> [PayoutWarSummary] {
+        guard let url = URL(string: baseUrl.trimmedSlash + "/api/war/admin-list") else {
+            throw OCAPIError.http(0)
+        }
+        var req = URLRequest(url: url); req.timeoutInterval = 15
+        req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        let data: Data
+        let resp: URLResponse
+        do { (data, resp) = try await URLSession.shared.data(for: req) }
+        catch { throw OCAPIError.transport(error) }
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200...299).contains(code) else { throw OCAPIError.http(code) }
+        do {
+            return try JSONDecoder().decode(PayoutWarListResponse.self, from: data).wars
+        } catch { throw OCAPIError.decode(error) }
+    }
+
+    /// GET /api/war/<warId>/payouts-admin?mode=dynamic (Bearer) — the
+    /// per-member owed cut for one ended war. 403 → "Admin role required."
+    static func fetchWarPayouts(baseUrl: String, jwt: String, warId: String) async throws -> WarPayouts {
+        guard let encoded = warId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+              let url = URL(string: baseUrl.trimmedSlash + "/api/war/\(encoded)/payouts-admin?mode=dynamic") else {
+            throw OCAPIError.http(0)
+        }
+        var req = URLRequest(url: url); req.timeoutInterval = 15
+        req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        let data: Data
+        let resp: URLResponse
+        do { (data, resp) = try await URLSession.shared.data(for: req) }
+        catch { throw OCAPIError.transport(error) }
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200...299).contains(code) else { throw OCAPIError.http(code) }
+        do {
+            return try JSONDecoder().decode(WarPayouts.self, from: data)
+        } catch { throw OCAPIError.decode(error) }
+    }
+
     // MARK: Faction — vault + members
 
     /// GET /api/oc/vault-requests — pending vault requests for our
