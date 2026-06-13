@@ -245,6 +245,7 @@ public struct BrowserView: View {
     @StateObject private var model = BrowserModel()
     @State private var showScripts = false
     @State private var toast: String?
+    @ObservedObject private var extUpdates = ExtensionUpdateStore.shared
     @FocusState private var addrFocused: Bool
 
     /// One controller per Browser tab. It reads the shared ScriptRegistry, so a
@@ -302,6 +303,9 @@ public struct BrowserView: View {
             model.reload()
         }
         .onAppear {
+            // Cheap version.json check (no download) so the Scripts-button badge
+            // surfaces an available extension update without opening the screen.
+            Task { await ExtensionUpdateStore.shared.check() }
             // Route an extension's in-page "Options" button (runtime.openOptionsPage
             // → openExtPage) to the options sheet — for the extension that asked,
             // and only while it's enabled (off means off).
@@ -443,6 +447,11 @@ public struct BrowserView: View {
             // the web view gets that whole row back).
             Button { showScripts = true } label: {
                 Image(systemName: "doc.text.fill")
+                    .overlay(alignment: .topTrailing) {
+                        if extUpdates.hasUpdates {
+                            Circle().fill(.red).frame(width: 8, height: 8).offset(x: 5, y: -3)
+                        }
+                    }
             }
         }
         .padding(.horizontal, 10)
