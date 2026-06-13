@@ -4,8 +4,9 @@ import CryptoKit
 /// Decides, per launch, whether each WebExtension's files are served from a
 /// server-fetched cache (`…/Application Support/webext-remote/<id>/`) or the app
 /// bundle (the seed). The cache wins only when it is valid and its version is
-/// `>=` the bundled seed's. Also performs the silent background update fetch
-/// (`checkAndFetch`), which applies on the NEXT launch — never a live hot-swap.
+/// `>=` the bundled seed's. Updates are user-driven: `checkForUpdate` (cheap,
+/// version.json only) surfaces an available version; `installUpdate` downloads +
+/// atomic-swaps it and `invalidate`s the memo so a hot-swap re-resolves to it.
 final class RemoteExtStore: @unchecked Sendable {
     static let shared = RemoteExtStore()
 
@@ -57,57 +58,75 @@ final class RemoteExtStore: @unchecked Sendable {
         struct Entry: Decodable { let path: String; let sha256: String }
     }
 
-    /// Silent. Fetch `version.json`; if it's newer than the active copy (and the
-    /// bundled seed isn't newer than `minSeedVersion`), download every file
-    /// (sha256-verified) into a staging dir and atomic-swap into
-    /// `…/webext-remote/<id>/`. Any failure discards staging and keeps the last
-    /// good copy. Applies on the next launch.
-    func checkAndFetch(id: String, source: URL) async {
-        guard let remoteDir, let scheme = source.scheme, let host = source.host else { return }
-        let origin = "\(scheme)://\(host)" + (source.port.map { ":\($0)" } ?? "")
-        do {
-            let (data, resp) = try await URLSession.shared.data(from: source)
-            guard (resp as? HTTPURLResponse)?.statusCode == 200,
-                  let man = try? JSONDecoder().decode(RemoteVersionManifest.self, from: data) else { return }
+    enum RemoteExtError: Error { case badSource, manifestUnavailable, downloadFailed, badStage }
 
-            let activeVer = manifestVersion(at: containerBase(for: id).appendingPathComponent("\(id)/manifest.json")) ?? "0"
-            guard VersionCompare.isUpdate(installed: activeVer, remote: man.version) else { return }
-            let seedVer = manifestVersion(at: bundleBase.appendingPathComponent("\(id)/manifest.json")) ?? "0"
-            if let minSeed = man.minSeedVersion, VersionCompare.compare(seedVer, minSeed) == .orderedDescending { return }
+    /// Drop the per-launch memoized container choice for `id` so the next
+    /// `containerBase(for: id)` re-resolves (picks a freshly-installed cache).
+    func invalidate(id: String) {
+        lock.lock(); defer { lock.unlock() }
+        containerCache[id] = nil
+    }
 
-            let staging = remoteDir.appendingPathComponent("\(id).incoming", isDirectory: true)
-            try? fm.removeItem(at: staging)
-            try fm.createDirectory(at: staging, withIntermediateDirectories: true)
+    /// Cheap: fetch only `version.json` and return the version to OFFER as an
+    /// update (or nil). No download. Drives the in-app "check for updates".
+    func checkForUpdate(id: String, source: URL) async -> String? {
+        guard let (data, resp) = try? await URLSession.shared.data(from: source),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
+              let man = try? JSONDecoder().decode(RemoteVersionManifest.self, from: data)
+        else { return nil }
+        let activeVer = manifestVersion(at: containerBase(for: id).appendingPathComponent("\(id)/manifest.json")) ?? "0"
+        let seedVer = manifestVersion(at: bundleBase.appendingPathComponent("\(id)/manifest.json")) ?? "0"
+        return ExtUpdateDecision.versionToOffer(active: activeVer, remote: man.version,
+                                                seed: seedVer, minSeed: man.minSeedVersion)
+    }
 
-            for f in man.files {
-                guard let fileURL = URL(string: origin + man.base + f.path) else {
-                    try? fm.removeItem(at: staging); return
-                }
-                let (fdata, fresp) = try await URLSession.shared.data(from: fileURL)
-                let sha = SHA256.hash(data: fdata).map { String(format: "%02x", $0) }.joined()
-                guard (fresp as? HTTPURLResponse)?.statusCode == 200, sha == f.sha256 else {
-                    try? fm.removeItem(at: staging); return
-                }
-                let dest = staging.appendingPathComponent(f.path)
-                try fm.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
-                try fdata.write(to: dest)
-            }
-            // Validate the staged manifest parses before committing.
-            guard manifestVersion(at: staging.appendingPathComponent("manifest.json")) != nil else {
-                try? fm.removeItem(at: staging); return
-            }
-
-            let live = remoteDir.appendingPathComponent(id, isDirectory: true)
-            try fm.createDirectory(at: remoteDir, withIntermediateDirectories: true)
-            if fm.fileExists(atPath: live.path) {
-                _ = try fm.replaceItemAt(live, withItemAt: staging)
-            } else {
-                try fm.moveItem(at: staging, to: live)
-            }
-            defaults.set(man.version, forKey: "webext-remote-version.\(id)")
-            WebDiag.log("webext-remote-updated", ["id": id, "version": man.version])
-        } catch {
-            WebDiag.log("webext-remote-fetch-error", ["id": id, "error": "\(error)"])
+    /// Heavy: download every file (sha256-verified) into a staging dir and
+    /// atomic-swap into `…/webext-remote/<id>/`. On success invalidate the memo
+    /// and return the new version. Throws on any failure — the live cache is
+    /// untouched until the swap, so a failure never half-installs.
+    @discardableResult
+    func installUpdate(id: String, source: URL) async throws -> String {
+        guard let remoteDir, let scheme = source.scheme, let host = source.host else {
+            throw RemoteExtError.badSource
         }
+        let origin = "\(scheme)://\(host)" + (source.port.map { ":\($0)" } ?? "")
+        let (data, resp) = try await URLSession.shared.data(from: source)
+        guard (resp as? HTTPURLResponse)?.statusCode == 200,
+              let man = try? JSONDecoder().decode(RemoteVersionManifest.self, from: data) else {
+            throw RemoteExtError.manifestUnavailable
+        }
+
+        let staging = remoteDir.appendingPathComponent("\(id).incoming", isDirectory: true)
+        try? fm.removeItem(at: staging)
+        try fm.createDirectory(at: staging, withIntermediateDirectories: true)
+
+        for f in man.files {
+            guard let fileURL = URL(string: origin + man.base + f.path) else {
+                try? fm.removeItem(at: staging); throw RemoteExtError.downloadFailed
+            }
+            let (fdata, fresp) = try await URLSession.shared.data(from: fileURL)
+            let sha = SHA256.hash(data: fdata).map { String(format: "%02x", $0) }.joined()
+            guard (fresp as? HTTPURLResponse)?.statusCode == 200, sha == f.sha256 else {
+                try? fm.removeItem(at: staging); throw RemoteExtError.downloadFailed
+            }
+            let dest = staging.appendingPathComponent(f.path)
+            try fm.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try fdata.write(to: dest)
+        }
+        guard manifestVersion(at: staging.appendingPathComponent("manifest.json")) != nil else {
+            try? fm.removeItem(at: staging); throw RemoteExtError.badStage
+        }
+
+        let live = remoteDir.appendingPathComponent(id, isDirectory: true)
+        try fm.createDirectory(at: remoteDir, withIntermediateDirectories: true)
+        if fm.fileExists(atPath: live.path) {
+            _ = try fm.replaceItemAt(live, withItemAt: staging)
+        } else {
+            try fm.moveItem(at: staging, to: live)
+        }
+        defaults.set(man.version, forKey: "webext-remote-version.\(id)")
+        invalidate(id: id)
+        WebDiag.log("webext-remote-updated", ["id": id, "version": man.version])
+        return man.version
     }
 }
