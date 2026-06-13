@@ -43,7 +43,7 @@ final class ExtensionRuntime {
             ExtInstance(id: "retorn", name: "ReTorn", attribution: "Heasleys4hemp",
                         mainWorldInjects: ["inject/inject_interceptFetch.js"],
                         injectorSuffix: "everywhere/retorn.js"),
-            ExtInstance(id: "torntools", name: "TornTools", attribution: "Mephiles", debug: true),
+            ExtInstance(id: "torntools", name: "TornTools", attribution: "Mephiles"),
         ].compactMap { $0 }
 
         // TornTools is bundled but defaults OFF (opt-in) so an untested second

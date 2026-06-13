@@ -110,16 +110,9 @@ final class ExtMessageRelay: NSObject, WKScriptMessageHandlerWithReply {
         let area = (body["area"] as? String) ?? "local"
         switch body["op"] as? String {
         case "get":
-            let result = storage.get(area: area, keys: body["keys"])
-            if storage.id == "torntools" && (result.isEmpty || result["settings"] != nil) {
-                WebDiag.log("webext-storage-get", ["area": area, "n": result.keys.count, "hasSettings": result["settings"] != nil])
-            }
-            reply(result, nil)
+            reply(storage.get(area: area, keys: body["keys"]), nil)
         case "set":
             if let items = body["items"] as? [String: Any] {
-                if storage.id == "torntools" && items["settings"] != nil {
-                    WebDiag.log("webext-storage-set", ["area": area, "n": items.keys.count])
-                }
                 storage.set(area: area, items: items)
             }
             reply(nil, nil)
@@ -127,7 +120,6 @@ final class ExtMessageRelay: NSObject, WKScriptMessageHandlerWithReply {
             storage.remove(area: area, keys: body["keys"])
             reply(nil, nil)
         case "clear":
-            if storage.id == "torntools" { WebDiag.log("webext-storage-clear", ["area": area]) }
             storage.clear(area: area)
             reply(nil, nil)
         default:
@@ -196,10 +188,6 @@ final class ExtMessageRelay: NSObject, WKScriptMessageHandlerWithReply {
             let text = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
             DispatchQueue.main.async {
                 ExtCrashDiag.breadcrumb("apiFetch:reply:\(status)")
-                if url.host?.contains("api.torn.com") == true {
-                    WebDiag.log("webext-apifetch", ["host": url.host ?? "", "status": status,
-                                                    "len": text.count, "head": String(text.prefix(160))])
-                }
                 reply(["status": status, "ok": (200..<300).contains(status), "body": text], nil)
             }
         }.resume()
