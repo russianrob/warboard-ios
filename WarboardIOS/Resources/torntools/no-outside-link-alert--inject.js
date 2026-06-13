@@ -5,7 +5,7 @@ var noOutsideLinkAlertInject = (function() {
 		return arg;
 	}
 	//#endregion
-	//#region extension/entrypoints/no-outside-link-alert--inject.ts
+	//#region src/extension/entrypoints/no-outside-link-alert--inject.ts
 	var no_outside_link_alert__inject_default = defineUnlistedScript(() => {
 		const originalConfirm = window.confirm;
 		window.confirm = (message) => {
@@ -14,7 +14,7 @@ var noOutsideLinkAlertInject = (function() {
 		};
 	});
 	//#endregion
-	//#region \0virtual:wxt-unlisted-script-entrypoint?/home/runner/work/torntools_extension/torntools_extension/extension/entrypoints/no-outside-link-alert--inject.ts
+	//#region \0virtual:wxt-unlisted-script-entrypoint?/home/runner/work/torntools_extension/torntools_extension/src/extension/entrypoints/no-outside-link-alert--inject.ts
 	function print(method, ...args) {}
 	/** Wrapper around `console` with a "[wxt]" prefix */
 	var logger = {

@@ -5,12 +5,12 @@ var pointsValueInject = (function() {
 		return arg;
 	}
 	//#endregion
-	//#region extension/entrypoints/points-value--inject.ts
+	//#region src/extension/entrypoints/points-value--inject.ts
 	var points_value__inject_default = defineUnlistedScript(() => {
 		window.initializeTooltip(".tt-points-value", "white-tooltip");
 	});
 	//#endregion
-	//#region \0virtual:wxt-unlisted-script-entrypoint?/home/runner/work/torntools_extension/torntools_extension/extension/entrypoints/points-value--inject.ts
+	//#region \0virtual:wxt-unlisted-script-entrypoint?/home/runner/work/torntools_extension/torntools_extension/src/extension/entrypoints/points-value--inject.ts
 	function print(method, ...args) {}
 	/** Wrapper around `console` with a "[wxt]" prefix */
 	var logger = {

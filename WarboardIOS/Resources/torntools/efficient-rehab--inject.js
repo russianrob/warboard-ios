@@ -5,7 +5,7 @@ var efficientRehabInject = (function() {
 		return arg;
 	}
 	//#endregion
-	//#region extension/entrypoints/efficient-rehab--inject.ts
+	//#region src/extension/entrypoints/efficient-rehab--inject.ts
 	var efficient_rehab__inject_default = defineUnlistedScript(() => {
 		window.addEventListener("tt-efficient-rehab", (event) => {
 			const $slider = $("#rehub-progress .ui-slider");
@@ -21,7 +21,7 @@ var efficientRehabInject = (function() {
 		window.dispatchEvent(new CustomEvent("tt-injected--efficient-rehab"));
 	});
 	//#endregion
-	//#region \0virtual:wxt-unlisted-script-entrypoint?/home/runner/work/torntools_extension/torntools_extension/extension/entrypoints/efficient-rehab--inject.ts
+	//#region \0virtual:wxt-unlisted-script-entrypoint?/home/runner/work/torntools_extension/torntools_extension/src/extension/entrypoints/efficient-rehab--inject.ts
 	function print(method, ...args) {}
 	/** Wrapper around `console` with a "[wxt]" prefix */
 	var logger = {

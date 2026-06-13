@@ -5,7 +5,7 @@ var serviceWorker = (function() {
 		return arg;
 	}
 	//#endregion
-	//#region extension/entrypoints/service-worker.ts
+	//#region src/extension/entrypoints/service-worker.ts
 	var service_worker_default = defineUnlistedScript(() => {
 		const worker = self;
 		worker.addEventListener("notificationclick", (event) => {
@@ -17,7 +17,7 @@ var serviceWorker = (function() {
 		});
 	});
 	//#endregion
-	//#region \0virtual:wxt-unlisted-script-entrypoint?/home/runner/work/torntools_extension/torntools_extension/extension/entrypoints/service-worker.ts
+	//#region \0virtual:wxt-unlisted-script-entrypoint?/home/runner/work/torntools_extension/torntools_extension/src/extension/entrypoints/service-worker.ts
 	function print(method, ...args) {}
 	/** Wrapper around `console` with a "[wxt]" prefix */
 	var logger = {

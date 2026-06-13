@@ -5,7 +5,7 @@ var tradeOpenChatInject = (function() {
 		return arg;
 	}
 	//#endregion
-	//#region extension/entrypoints/trade-open-chat--inject.ts
+	//#region src/extension/entrypoints/trade-open-chat--inject.ts
 	var trade_open_chat__inject_default = defineUnlistedScript(async () => {
 		const playerID = (await cookieStore.get("uid")).value;
 		const traderID = $(`#trade-container .log > li .desc a:not([href*="${playerID}"])`).attr("href").match(/XID=(\d*)/i)[1];
@@ -13,7 +13,7 @@ var tradeOpenChatInject = (function() {
 		else window.dispatchEvent(new CustomEvent("chat.openChannel", { detail: { userId: String(traderID) } }));
 	});
 	//#endregion
-	//#region \0virtual:wxt-unlisted-script-entrypoint?/home/runner/work/torntools_extension/torntools_extension/extension/entrypoints/trade-open-chat--inject.ts
+	//#region \0virtual:wxt-unlisted-script-entrypoint?/home/runner/work/torntools_extension/torntools_extension/src/extension/entrypoints/trade-open-chat--inject.ts
 	function print(method, ...args) {}
 	/** Wrapper around `console` with a "[wxt]" prefix */
 	var logger = {

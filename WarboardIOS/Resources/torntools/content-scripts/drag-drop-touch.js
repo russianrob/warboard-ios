@@ -368,7 +368,7 @@ var dragDropTouch = (function() {
 		return definition;
 	}
 	//#endregion
-	//#region extension/entrypoints/drag-drop-touch.content.ts
+	//#region src/extension/entrypoints/drag-drop-touch.content.ts
 	var drag_drop_touch_content_default = defineContentScript({
 		matches: ["https://*.torn.com/item.php*", "https://*.torn.com/crimes.php*"],
 		runAt: "document_start",
@@ -637,7 +637,7 @@ var dragDropTouch = (function() {
 		}
 	};
 	//#endregion
-	//#region \0virtual:wxt-content-script-isolated-world-entrypoint?/home/runner/work/torntools_extension/torntools_extension/extension/entrypoints/drag-drop-touch.content.ts
+	//#region \0virtual:wxt-content-script-isolated-world-entrypoint?/home/runner/work/torntools_extension/torntools_extension/src/extension/entrypoints/drag-drop-touch.content.ts
 	function print(method, ...args) {}
 	/** Wrapper around `console` with a "[wxt]" prefix */
 	var logger = {

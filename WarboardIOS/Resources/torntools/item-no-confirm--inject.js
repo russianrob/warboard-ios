@@ -5,7 +5,7 @@ var itemNoConfirmInject = (function() {
 		return arg;
 	}
 	//#endregion
-	//#region extension/entrypoints/item-no-confirm--inject.ts
+	//#region src/extension/entrypoints/item-no-confirm--inject.ts
 	var item_no_confirm__inject_default = defineUnlistedScript(() => {
 		if (typeof window.xhrSendAdjustments === "undefined") window.xhrSendAdjustments = {};
 		function getParams(body) {
@@ -32,7 +32,7 @@ var itemNoConfirmInject = (function() {
 		};
 	});
 	//#endregion
-	//#region \0virtual:wxt-unlisted-script-entrypoint?/home/runner/work/torntools_extension/torntools_extension/extension/entrypoints/item-no-confirm--inject.ts
+	//#region \0virtual:wxt-unlisted-script-entrypoint?/home/runner/work/torntools_extension/torntools_extension/src/extension/entrypoints/item-no-confirm--inject.ts
 	function print(method, ...args) {}
 	/** Wrapper around `console` with a "[wxt]" prefix */
 	var logger = {

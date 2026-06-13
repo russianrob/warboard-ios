@@ -5,12 +5,12 @@ var apiKeyFocusInject = (function() {
 		return arg;
 	}
 	//#endregion
-	//#region extension/entrypoints/api-key-focus--inject.ts
+	//#region src/extension/entrypoints/api-key-focus--inject.ts
 	var api_key_focus__inject_default = defineUnlistedScript(() => {
 		$("#api_key").focusout();
 	});
 	//#endregion
-	//#region \0virtual:wxt-unlisted-script-entrypoint?/home/runner/work/torntools_extension/torntools_extension/extension/entrypoints/api-key-focus--inject.ts
+	//#region \0virtual:wxt-unlisted-script-entrypoint?/home/runner/work/torntools_extension/torntools_extension/src/extension/entrypoints/api-key-focus--inject.ts
 	function print(method, ...args) {}
 	/** Wrapper around `console` with a "[wxt]" prefix */
 	var logger = {

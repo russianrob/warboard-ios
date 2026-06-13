@@ -189,69 +189,6 @@ body.dark-mode #tt-page-status .tt-features-list {
 #tt-page-status div[scope].no-content {
 	display: none;
 }
-.tt-stats-estimate-profile {
-	float: right;
-	padding-right: 10px;
-	color: var(--tt-color-light-green);
-}
-
-.tt-stats-estimate {
-	text-align: center;
-	padding: 5px;
-	border-bottom: 1px solid var(--default-panel-divider-outer-side-color);
-	min-height: 11px;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-}
-
-body.tt-elimination .tt-stats-estimate {
-	background-color: var(--elimination-team-list-background-color);
-}
-
-.tt-stats-estimate .tt-loading-placeholder {
-	padding: 0;
-}
-
-.tt-stats-estimate-attacks-wrapper > * {
-	margin-left: 10px !important;
-}
-
-.tt-mobile .tt-stats-estimate-attacks-wrapper > :first-child {
-	margin-left: 0 !important;
-}
-
-.tt-mobile .tt-stats-estimate-attacks-wrapper > :nth-child(2) {
-	margin-left: 0 !important;
-}
-
-.tt-mobile .tt-stats-estimate-attacks-wrapper > :nth-child(3) {
-	margin-left: 5px !important;
-}
-
-.tt-mobile .tt-stats-estimate-attacks-wrapper > :nth-child(4) {
-	margin-left: 12px !important;
-}
-
-.bounties-list .tt-stats-estimate {
-	background: var(--newspaper-divider-horizontal-older-line-url) left top repeat-x;
-}
-
-body.dark-mode .bounties-list .tt-stats-estimate {
-	color: #aaa;
-}
-
-.faction-war .tt-stats-estimate {
-	border-bottom: unset;
-}
-
-.tt-transparent-estimates .tt-stats-estimate {
-	background-color: var(--default-bg-panel-color);
-}
-
-body[data-page="enemies"] .tt-stats-estimate {
-	background: var(--default-bg-panel-color);
-}
 .tt-textbox {
 	width: 75%;
 	border-radius: 5px;
@@ -693,6 +630,69 @@ body.dark-mode .tt-dual-range .handle {
 
 .tt-slider-label {
 	margin-top: 10px;
+}
+.tt-stats-estimate-profile {
+	float: right;
+	padding-right: 10px;
+	color: var(--tt-color-light-green);
+}
+
+.tt-stats-estimate {
+	text-align: center;
+	padding: 5px;
+	border-bottom: 1px solid var(--default-panel-divider-outer-side-color);
+	min-height: 11px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+body.tt-elimination .tt-stats-estimate {
+	background-color: var(--elimination-team-list-background-color);
+}
+
+.tt-stats-estimate .tt-loading-placeholder {
+	padding: 0;
+}
+
+.tt-stats-estimate-attacks-wrapper > * {
+	margin-left: 10px !important;
+}
+
+.tt-mobile .tt-stats-estimate-attacks-wrapper > :first-child {
+	margin-left: 0 !important;
+}
+
+.tt-mobile .tt-stats-estimate-attacks-wrapper > :nth-child(2) {
+	margin-left: 0 !important;
+}
+
+.tt-mobile .tt-stats-estimate-attacks-wrapper > :nth-child(3) {
+	margin-left: 5px !important;
+}
+
+.tt-mobile .tt-stats-estimate-attacks-wrapper > :nth-child(4) {
+	margin-left: 12px !important;
+}
+
+.bounties-list .tt-stats-estimate {
+	background: var(--newspaper-divider-horizontal-older-line-url) left top repeat-x;
+}
+
+body.dark-mode .bounties-list .tt-stats-estimate {
+	color: #aaa;
+}
+
+.faction-war .tt-stats-estimate {
+	border-bottom: unset;
+}
+
+.tt-transparent-estimates .tt-stats-estimate {
+	background-color: var(--default-bg-panel-color);
+}
+
+body[data-page="enemies"] .tt-stats-estimate {
+	background: var(--default-bg-panel-color);
 }
 .tt-align-left .container {
 	margin-left: 20px !important;
@@ -1765,10 +1765,6 @@ body.tt-mobile .stats-row .desc {
 	height: 34px;
 }
 
-.tt-message-box .tt-icon-info {
-	margin-top: 9px;
-}
-
 .tt-message-box .tt-message-wrap {
 	background-color: var(--default-bg-panel-active-color);
 	background: var(--info-msg-bg-gradient);
@@ -1844,12 +1840,6 @@ body[data-layout="hospital"] #sidebarroot .pill {
 
 #sidebarroot .pill:hover {
 	background-color: var(--default-bg-panel-active-color) !important;
-}
-
-.tt-icon-info {
-	height: 18px;
-	width: 10px;
-	background: url(https://www.torn.com/images/v2/main/info_msg/ordinary_importance.png) left top no-repeat;
 }
 
 /**

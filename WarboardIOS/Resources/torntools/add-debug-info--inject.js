@@ -5,12 +5,12 @@ var addDebugInfoInject = (function() {
 		return arg;
 	}
 	//#endregion
-	//#region extension/entrypoints/add-debug-info--inject.ts
+	//#region src/extension/entrypoints/add-debug-info--inject.ts
 	var add_debug_info__inject_default = defineUnlistedScript(() => {
 		$("#editor-wrapper .editor-content.mce-content-body").keyup();
 	});
 	//#endregion
-	//#region \0virtual:wxt-unlisted-script-entrypoint?/home/runner/work/torntools_extension/torntools_extension/extension/entrypoints/add-debug-info--inject.ts
+	//#region \0virtual:wxt-unlisted-script-entrypoint?/home/runner/work/torntools_extension/torntools_extension/src/extension/entrypoints/add-debug-info--inject.ts
 	function print(method, ...args) {}
 	/** Wrapper around `console` with a "[wxt]" prefix */
 	var logger = {
