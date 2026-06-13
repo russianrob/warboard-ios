@@ -60,6 +60,18 @@ final class ExtensionRuntime {
         Task.detached(priority: .utility) {
             for (id, src) in remote { await RemoteExtStore.shared.checkAndFetch(id: id, source: src) }
         }
+
+        // storage.onChanged: a write in ANY context broadcasts to the background
+        // world AND the page content world, so listeners react live. Without this
+        // TornTools' live toggles (e.g. "Hide Chat") only applied after a refresh.
+        // [weak inst] breaks the relay → closure → inst retain cycle.
+        for inst in instances {
+            let extId = inst.id
+            inst.relay.onStorageChanged = { [weak self, weak inst] area, changes in
+                inst?.backgroundHost.fireStorageChanged(area: area, changes: changes)
+                self?.pushStorageChangedToContent?(extId, area, changes)
+            }
+        }
     }
 
     private func instance(_ id: String) -> ExtInstance? { instances.first { $0.id == id } }
@@ -83,6 +95,11 @@ final class ExtensionRuntime {
             }
         }
     }
+
+    /// Push `storage.onChanged` into the page content world. Set by
+    /// `UserscriptController` (which holds the page web view); called with
+    /// (extensionId, area, changes) and emits into that extension's content world.
+    var pushStorageChangedToContent: ((String, String, [String: [String: Any]]) -> Void)?
 
     /// The options target for an extension (nil if it's not bundled or declares
     /// no options page).

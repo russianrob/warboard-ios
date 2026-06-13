@@ -89,11 +89,17 @@ final class ExtStorage {
         return changes
     }
 
-    func clear(area: String) {
+    @discardableResult
+    func clear(area: String) -> [String: [String: Any]] {
         let p = prefix(area)
+        var changes: [String: [String: Any]] = [:]
         for (full, _) in defaults.dictionaryRepresentation() where full.hasPrefix(p) {
+            let k = String(full.dropFirst(p.count))
+            let old = read(area, k)
             defaults.removeObject(forKey: full)
+            changes[k] = ["oldValue": old ?? NSNull(), "newValue": NSNull()]
         }
+        return changes
     }
 
     /// The stored version marker, for install-vs-update synthesis.

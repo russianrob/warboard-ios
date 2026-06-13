@@ -172,6 +172,19 @@ final class ExtBackgroundHost: NSObject, WKNavigationDelegate {
         }
     }
 
+    /// Emit `storage.onChanged` into the bg world so background-side listeners
+    /// react live (mirrors the content-world push in ExtensionRuntime).
+    func fireStorageChanged(area: String, changes: [String: [String: Any]]) {
+        let json = (try? JSONSerialization.data(withJSONObject: changes))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+        Task { @MainActor [weak self] in
+            guard let self, let wv = self.webView else { return }
+            _ = try? await wv.callAsyncJavaScript(
+                "window.__webext_emit && window.__webext_emit('storageChanged', JSON.parse(c), a);",
+                arguments: ["c": json, "a": area], in: nil, contentWorld: .page)
+        }
+    }
+
     // MARK: - helpers
 
     private func waitReady() async {

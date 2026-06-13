@@ -101,6 +101,19 @@ final class UserscriptController: NSObject, ObservableObject {
             guard let self, let url = URL(string: urlString) else { return }
             Task { @MainActor in self.webView?.load(URLRequest(url: url)) }
         }
+        // storage.onChanged → emit into the extension's content world on the page
+        // web view, so feature toggles apply live (no refresh). The content scripts
+        // + their onChanged listeners run in `.world(name: extId)`.
+        ExtensionRuntime.shared.pushStorageChangedToContent = { [weak self] extId, area, changes in
+            let json = (try? JSONSerialization.data(withJSONObject: changes))
+                .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+            Task { @MainActor in
+                guard let wv = self?.webView else { return }
+                _ = try? await wv.callAsyncJavaScript(
+                    "window.__webext_emit && window.__webext_emit('storageChanged', JSON.parse(c), a);",
+                    arguments: ["c": json, "a": area], in: nil, contentWorld: .world(name: extId))
+            }
+        }
     }
 
     /// Convenience for SwiftUI hosts: build a controller from the default,

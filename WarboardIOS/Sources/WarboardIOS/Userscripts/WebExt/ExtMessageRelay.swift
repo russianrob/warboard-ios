@@ -18,6 +18,11 @@ final class ExtMessageRelay: NSObject, WKScriptMessageHandlerWithReply {
     /// runtime.openOptionsPage / action popup → ask the app to present an
     /// extension page (e.g. "options") in a sheet.
     var onOpenExtPage: ((String) -> Void)?
+    /// Fired after a storage write so `storage.onChanged` listeners in OTHER
+    /// contexts (the page content script, the background) react live. ExtInstance
+    /// wires this to the content-world + background broadcast. Without it, settings
+    /// only apply on the next page load (e.g. TornTools' "Hide Chat" needed a refresh).
+    var onStorageChanged: ((_ area: String, _ changes: [String: [String: Any]]) -> Void)?
 
     /// `browser.alarms` backing: a repeating timer per alarm name whose tick
     /// fires `onAlarm` into the bg world (the extension's only recurring trigger,
@@ -113,14 +118,17 @@ final class ExtMessageRelay: NSObject, WKScriptMessageHandlerWithReply {
             reply(storage.get(area: area, keys: body["keys"]), nil)
         case "set":
             if let items = body["items"] as? [String: Any] {
-                storage.set(area: area, items: items)
+                let changes = storage.set(area: area, items: items)
+                if !changes.isEmpty { onStorageChanged?(area, changes) }
             }
             reply(nil, nil)
         case "remove":
-            storage.remove(area: area, keys: body["keys"])
+            let changes = storage.remove(area: area, keys: body["keys"])
+            if !changes.isEmpty { onStorageChanged?(area, changes) }
             reply(nil, nil)
         case "clear":
-            storage.clear(area: area)
+            let changes = storage.clear(area: area)
+            if !changes.isEmpty { onStorageChanged?(area, changes) }
             reply(nil, nil)
         default:
             reply(nil, "bad storage op")
