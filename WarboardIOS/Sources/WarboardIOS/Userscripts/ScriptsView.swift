@@ -111,6 +111,17 @@ final class ScriptsViewModel: ObservableObject {
         }
     }
 
+    func installExtensionUpdate(_ id: String) async {
+        isWorking = true; errorMessage = nil
+        defer { isWorking = false }
+        do {
+            _ = try await ExtensionRuntime.shared.installExtensionUpdate(id: id)
+            ExtensionUpdateStore.shared.clear(id: id)
+        } catch {
+            errorMessage = "Extension update failed: \(error.localizedDescription)"
+        }
+    }
+
     /// Save an in-app edit of a script's source: re-parse its metadata, preserve
     /// the install identity (id/enabled/order/wildcard grant), upsert, re-resolve
     /// @require, and reload the live page so the change applies immediately.
@@ -175,6 +186,7 @@ public struct ScriptsView: View {
     @StateObject private var vm = ScriptsViewModel()
     @State private var extTick = 0
     @State private var editing: Userscript?
+    @ObservedObject private var updateStore = ExtensionUpdateStore.shared
 
     public var body: some View {
         List {
@@ -189,14 +201,14 @@ public struct ScriptsView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    Task { await vm.checkForUpdates() }
+                    Task { await vm.checkForUpdates(); await updateStore.check() }
                 } label: {
                     Image(systemName: "arrow.triangle.2.circlepath")
                 }
             }
             ToolbarItem(placement: .topBarTrailing) { EditButton() }
         }
-        .onAppear { vm.reload() }
+        .onAppear { vm.reload(); Task { await updateStore.check() } }
         .sheet(item: $editing) { script in
             ScriptEditorView(script: script) { newSource in
                 Task { await vm.saveEdit(script, source: newSource) }
@@ -224,6 +236,17 @@ public struct ScriptsView: View {
                             Text(ext.name)
                             Text("v\(ext.version) · \(ext.attribution)")
                                 .font(.caption).foregroundStyle(.secondary)
+                            if let newVersion = updateStore.available[ext.id] {
+                                Button {
+                                    Task { await vm.installExtensionUpdate(ext.id) }
+                                } label: {
+                                    Label("Install update: \(newVersion)", systemImage: "arrow.down.circle.fill")
+                                        .font(.caption)
+                                }
+                                .buttonStyle(.borderless)
+                                .tint(.orange)
+                                .disabled(vm.isWorking)
+                            }
                         }
                     }
                 }
