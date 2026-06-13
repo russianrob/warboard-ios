@@ -11,7 +11,7 @@ final class ExtBackgroundHost: NSObject, WKNavigationDelegate {
     private var webView: WKWebView?
     private let id: String
     private let relay: ExtMessageRelay
-    private let version: String
+    private var version: String
     private let storage: ExtStorage
     private var isReady = false
     private var readyWaiters: [CheckedContinuation<Void, Never>] = []
@@ -44,6 +44,20 @@ final class ExtBackgroundHost: NSObject, WKNavigationDelegate {
         if let url = URL(string: "\(ExtResourceScheme.scheme)://\(id)/_bg.html") {
             wv.load(URLRequest(url: url))
         }
+    }
+
+    /// Update the version used by `maybeFireInstalled` (so a hot-swap fires
+    /// `onInstalled(update)` and the extension migrates). Call before `restart()`.
+    func updateVersion(_ v: String) { version = v }
+
+    /// Tear down the hidden bg webview and start a fresh one — reloads
+    /// `_background.js` from the (now-updated) cache. Safe if never started.
+    @MainActor
+    func restart() {
+        webView?.navigationDelegate = nil
+        webView = nil
+        isReady = false
+        start()
     }
 
     /// Run the background's onMessage handlers for `message` and return the reply.
