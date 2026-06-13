@@ -181,11 +181,18 @@ enum WarboardAPI {
         let dollarPayout: Int64
         let attackCount: Int
         let sharePct: Double
+        /// Per-category attack counts (`war_hit`, `retal`, `overseas_war`,
+        /// `assist`, `chain_hit`, `os_chain`, `non_war`, `failed`). Only
+        /// nonzero categories are present in the server response.
+        let breakdown: [String: Int]
+        let totalAttacks: Int
+        let score: Double
 
         var id: String { playerId }
 
         enum CodingKeys: String, CodingKey {
             case playerId, name, dollarPayout, attackCount, sharePct
+            case breakdown, totalAttacks, score
         }
 
         init(from decoder: Decoder) throws {
@@ -195,6 +202,40 @@ enum WarboardAPI {
             dollarPayout = WarboardAPI.decodeInt64(c, .dollarPayout)
             attackCount = try c.decodeIfPresent(Int.self, forKey: .attackCount) ?? 0
             sharePct = try c.decodeIfPresent(Double.self, forKey: .sharePct) ?? 0
+            // Counts are integers, but tolerate a Double encoding by
+            // falling back and truncating to Int.
+            if let counts = try? c.decodeIfPresent([String: Int].self, forKey: .breakdown) {
+                breakdown = counts ?? [:]
+            } else if let dbls = try? c.decodeIfPresent([String: Double].self, forKey: .breakdown) {
+                breakdown = (dbls ?? [:]).mapValues { Int($0) }
+            } else {
+                breakdown = [:]
+            }
+            totalAttacks = try c.decodeIfPresent(Int.self, forKey: .totalAttacks) ?? 0
+            score = try c.decodeIfPresent(Double.self, forKey: .score) ?? 0
+        }
+    }
+
+    /// Persisted payout knobs the admin can override. Sparse — only the
+    /// fields the admin has actually set come back from the server.
+    struct PayoutSettings: Decodable, Equatable {
+        let lootOverride: Double?
+        let payoutPct: Double?
+        let assistWeight: Double?
+        let nonWarWeight: Double?
+        let failedWeight: Double?
+
+        enum CodingKeys: String, CodingKey {
+            case lootOverride, payoutPct, assistWeight, nonWarWeight, failedWeight
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            lootOverride = try c.decodeIfPresent(Double.self, forKey: .lootOverride)
+            payoutPct = try c.decodeIfPresent(Double.self, forKey: .payoutPct)
+            assistWeight = try c.decodeIfPresent(Double.self, forKey: .assistWeight)
+            nonWarWeight = try c.decodeIfPresent(Double.self, forKey: .nonWarWeight)
+            failedWeight = try c.decodeIfPresent(Double.self, forKey: .failedWeight)
         }
     }
 
@@ -206,9 +247,22 @@ enum WarboardAPI {
         let payoutPool: Int64
         let payoutPct: Double
         let members: [PayoutMember]
+        /// "dynamic" (score-weighted) or "static" (per-hit) — a query
+        /// param on the fetch, echoed back by the server.
+        let mode: String
+        /// "archive" when the server served a frozen, pre-computed payout
+        /// for an archived war (settings then no longer recompute).
+        let scoreSource: String?
+        let totalScore: Double
+        let settings: PayoutSettings?
+
+        /// Archived wars are read-only: amounts are frozen and admin
+        /// settings only apply to wars still being computed.
+        var isArchived: Bool { scoreSource == "archive" }
 
         enum CodingKeys: String, CodingKey {
             case enemyFactionName, warResult, lootTotal, payoutPool, payoutPct, members
+            case mode, scoreSource, totalScore, settings
         }
 
         init(from decoder: Decoder) throws {
@@ -219,6 +273,10 @@ enum WarboardAPI {
             payoutPool = WarboardAPI.decodeInt64(c, .payoutPool)
             payoutPct = try c.decodeIfPresent(Double.self, forKey: .payoutPct) ?? 0
             members = try c.decodeIfPresent([PayoutMember].self, forKey: .members) ?? []
+            mode = try c.decodeIfPresent(String.self, forKey: .mode) ?? "dynamic"
+            scoreSource = try c.decodeIfPresent(String.self, forKey: .scoreSource)
+            totalScore = try c.decodeIfPresent(Double.self, forKey: .totalScore) ?? 0
+            settings = try c.decodeIfPresent(PayoutSettings.self, forKey: .settings)
         }
 
         /// Memberwise init — used to synthesize an empty placeholder when
@@ -226,13 +284,19 @@ enum WarboardAPI {
         /// "No completed wars yet" empty state).
         init(enemyFactionName: String = "", warResult: String? = nil,
              lootTotal: Int64 = 0, payoutPool: Int64 = 0,
-             payoutPct: Double = 0, members: [PayoutMember] = []) {
+             payoutPct: Double = 0, members: [PayoutMember] = [],
+             mode: String = "dynamic", scoreSource: String? = nil,
+             totalScore: Double = 0, settings: PayoutSettings? = nil) {
             self.enemyFactionName = enemyFactionName
             self.warResult = warResult
             self.lootTotal = lootTotal
             self.payoutPool = payoutPool
             self.payoutPct = payoutPct
             self.members = members
+            self.mode = mode
+            self.scoreSource = scoreSource
+            self.totalScore = totalScore
+            self.settings = settings
         }
     }
 
@@ -266,11 +330,12 @@ enum WarboardAPI {
         } catch { throw OCAPIError.decode(error) }
     }
 
-    /// GET /api/war/<warId>/payouts-admin?mode=dynamic (Bearer) — the
-    /// per-member owed cut for one ended war. 403 → "Admin role required."
-    static func fetchWarPayouts(baseUrl: String, jwt: String, warId: String) async throws -> WarPayouts {
+    /// GET /api/war/<warId>/payouts-admin?mode=dynamic|static (Bearer) —
+    /// the per-member owed cut for one ended war. `mode` is transient
+    /// (query param). 403 → "Admin role required."
+    static func fetchWarPayouts(baseUrl: String, jwt: String, warId: String, mode: String = "dynamic") async throws -> WarPayouts {
         guard let encoded = warId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
-              let url = URL(string: baseUrl.trimmedSlash + "/api/war/\(encoded)/payouts-admin?mode=dynamic") else {
+              let url = URL(string: baseUrl.trimmedSlash + "/api/war/\(encoded)/payouts-admin?mode=\(mode)") else {
             throw OCAPIError.http(0)
         }
         var req = URLRequest(url: url); req.timeoutInterval = 15
@@ -284,6 +349,28 @@ enum WarboardAPI {
         do {
             return try JSONDecoder().decode(WarPayouts.self, from: data)
         } catch { throw OCAPIError.decode(error) }
+    }
+
+    /// POST /api/war/<warId>/payout-settings-admin (Bearer) — persist the
+    /// admin's payout overrides. `settings` is a SPARSE dict of only the
+    /// changed fields (`lootOverride`, `payoutPct`, `assistWeight`,
+    /// `nonWarWeight`, `failedWeight`). The server persists them and
+    /// invalidates the war's payout cache; the caller re-fetches.
+    static func setPayoutSettings(baseUrl: String, jwt: String, warId: String, settings: [String: Double]) async throws {
+        guard let encoded = warId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+              let url = URL(string: baseUrl.trimmedSlash + "/api/war/\(encoded)/payout-settings-admin") else {
+            throw OCAPIError.http(0)
+        }
+        var req = URLRequest(url: url); req.timeoutInterval = 15
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: settings)
+        let resp: URLResponse
+        do { (_, resp) = try await URLSession.shared.data(for: req) }
+        catch { throw OCAPIError.transport(error) }
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200...299).contains(code) else { throw OCAPIError.http(code) }
     }
 
     // MARK: Faction — vault + members
