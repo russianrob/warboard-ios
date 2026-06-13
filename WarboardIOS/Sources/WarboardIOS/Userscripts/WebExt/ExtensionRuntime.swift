@@ -65,6 +65,7 @@ final class ExtensionRuntime {
             inst.relay.onStorageChanged = { [weak self, weak inst] area, changes in
                 inst?.backgroundHost.fireStorageChanged(area: area, changes: changes)
                 self?.pushStorageChangedToContent?(extId, area, changes)
+                self?.pushStorageChangedToExtPage?(extId, area, changes)
             }
         }
     }
@@ -95,6 +96,13 @@ final class ExtensionRuntime {
     /// `UserscriptController` (which holds the page web view); called with
     /// (extensionId, area, changes) and emits into that extension's content world.
     var pushStorageChangedToContent: ((String, String, [String: [String: Any]]) -> Void)?
+
+    /// Push `storage.onChanged` into a visible extension PAGE (options/popup) web
+    /// view. Set by `ExtPageView` while presented. Without it an options-page
+    /// write persists but the page's OWN onChanged listeners never fire, so its
+    /// reactive controls (e.g. TornTools' selects) snap back to the old value
+    /// until a reload re-reads storage. Mirrors `pushStorageChangedToContent`.
+    var pushStorageChangedToExtPage: ((String, String, [String: [String: Any]]) -> Void)?
 
     /// The options target for an extension (nil if it's not bundled or declares
     /// no options page).
