@@ -1,4 +1,5 @@
 import SwiftUI
+import WebKit
 
 /// iOS settings — Torn API key (auth on warboard endpoints) + warboard
 /// base URL + notification toggles. No Sparkle (TestFlight handles
@@ -13,6 +14,7 @@ struct SettingsView: View {
     @State private var apiKey: String = ""
     @State private var baseUrl: String = ""
     @State private var savedToast: String?
+    @State private var clearedToast: String?
 
     var body: some View {
         Form {
@@ -67,6 +69,26 @@ struct SettingsView: View {
             }
             if let auth = admin.auth, auth.isOwner {
                 PM2LogsSection(admin: admin, prefs: prefs)
+            }
+
+            Section("Browser") {
+                Button(role: .destructive) {
+                    WKWebsiteDataStore.default().removeData(
+                        ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(),
+                        modifiedSince: .distantPast
+                    ) {
+                        DispatchQueue.main.async {
+                            clearedToast = "Web data cleared — reload Torn (you'll log in again)"
+                        }
+                    }
+                } label: {
+                    Text("Clear web data (fix stuck Cloudflare checks)")
+                }
+                if let t = clearedToast {
+                    Text(t).foregroundStyle(.green).font(.caption)
+                }
+                Text("Wipes the in-app browser's cookies + cache for every site. Use if Torn gets stuck on a looping Cloudflare 'Verify you are human' check — you'll need to log into Torn again.")
+                    .font(.caption2).foregroundStyle(.secondary)
             }
 
             Section("About") {

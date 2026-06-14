@@ -45,7 +45,10 @@ function interceptFetch(url,q, callback) {
       return new Promise((resolve, reject) => {
         return originalFetch.apply(this, arguments).then(function(data) {
             let dataurl = data.url.toString();
-            if (dataurl.includes(url) && dataurl.includes(q)) {
+            // warboard: never clone Cloudflare challenge responses — data.clone() on
+            // /cdn-cgi/ responses disturbs them in WKWebView and breaks the "Just a
+            // moment" challenge (→ escalation to a looping interactive Turnstile).
+            if (dataurl.includes(url) && dataurl.includes(q) && !dataurl.includes("/cdn-cgi/")) {
                const clone = data.clone();
                if (clone) {
                   clone.json().then((response) => callback(response, data.url))
