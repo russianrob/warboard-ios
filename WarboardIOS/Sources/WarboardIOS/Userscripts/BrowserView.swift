@@ -245,6 +245,7 @@ public struct BrowserView: View {
     @StateObject private var model = BrowserModel()
     @State private var showScripts = false
     @State private var toast: String?
+    @State private var confirmClearData = false
     @ObservedObject private var extUpdates = ExtensionUpdateStore.shared
     @FocusState private var addrFocused: Bool
 
@@ -292,6 +293,16 @@ public struct BrowserView: View {
         }
         .sheet(item: $controller.pendingInstall) { item in
             InstallScriptView(url: item.url) { controller.pendingInstall = nil }
+        }
+        .confirmationDialog("Clear web data?", isPresented: $confirmClearData, titleVisibility: .visible) {
+            Button("Clear (logs you out of Torn)", role: .destructive) {
+                WKWebsiteDataStore.default().removeData(
+                    ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(),
+                    modifiedSince: .distantPast
+                ) { DispatchQueue.main.async { model.reload() } }
+            }
+        } message: {
+            Text("Wipes the in-app browser's cookies + cache to reset a stuck Cloudflare check. You'll log into Torn again.")
         }
         // A newly installed/enabled/removed script changes the shared registry;
         // reload the live page so the next page build re-applies the script set
@@ -431,6 +442,9 @@ public struct BrowserView: View {
                             Label("\(target.title)…", systemImage: "puzzlepiece.extension")
                         }
                     }
+                }
+                Button(role: .destructive) { confirmClearData = true } label: {
+                    Label("Clear web data", systemImage: "trash")
                 }
                 Divider()
                 if controller.menuCommands.isEmpty {
