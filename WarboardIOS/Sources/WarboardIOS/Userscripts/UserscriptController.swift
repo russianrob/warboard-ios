@@ -72,6 +72,15 @@ final class UserscriptController: NSObject, ObservableObject {
 
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()          // share Torn login cookie jar
+        // Present as real Mobile Safari (WKWebView IS the Safari engine). Without the
+        // `Version/… Safari/604.1` tokens the raw WKWebView UA reads as a generic
+        // embedded WebView, which trips Cloudflare's "Just a moment…" challenge far
+        // more than Safari does. Derive Version/ from the running OS so it matches the
+        // OS string WKWebView already puts in the UA (a version mismatch is itself a
+        // bot signal). Result e.g. "…(KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1".
+        let os = ProcessInfo.processInfo.operatingSystemVersion
+        config.applicationNameForUserAgent =
+            "Version/\(os.majorVersion).\(os.minorVersion) Mobile/15E148 Safari/604.1"
         config.allowsInlineMediaPlayback = true
         config.defaultWebpagePreferences.allowsContentJavaScript = true
         config.preferences.javaScriptCanOpenWindowsAutomatically = true
