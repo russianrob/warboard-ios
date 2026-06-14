@@ -150,12 +150,31 @@ final class UserscriptController: NSObject, ObservableObject {
         }
     }
 
+    // Cloudflare challenge loop detection + auto-recovery. After ~2h idle the
+    // cf_clearance cookie expires; reopening the app triggers a FRESH challenge
+    // that WKWebView can loop on (PDA's recognized UA gets the easy one and
+    // passes). Set from decidePolicyFor:navigationResponse below.
+    private var cfChallengeActive = false
+    private var cfChallengeLoads: [Date] = []
+    private var cfRecoveryAttempts = 0
+
     /// Rebuild the WKUserScript set for `url`. Called from
     /// decidePolicyFor BEFORE allowing the navigation, so WebKit applies the
     /// new scripts to the page about to load.
     func rebuildUserScripts(for url: URL) {
         // New page → the previous page's menu commands no longer apply.
         menuCommands.removeAll()
+
+        // On a Cloudflare challenge page, inject ONLY the diag probe + link fixer:
+        // a userscript/extension that clones the challenge's fetch breaks it in
+        // WKWebView (→ the reopen loop). Skip ALL userscripts + extension scripts.
+        if cfChallengeActive {
+            userContent.removeAllUserScripts()
+            userContent.addUserScript(WebDiagBridge.probeUserScript())
+            userContent.addUserScript(Self.linkFixerUserScript())
+            WebDiag.log("cf-skip-inject", ["url": url.absoluteString])
+            return
+        }
 
         // 1. Enabled scripts whose @match/@include match and aren't @excluded,
         //    in install order. Selection lives in the registry (MatchMatcher).
@@ -302,6 +321,74 @@ extension UserscriptController: WKNavigationDelegate {
             rebuildUserScripts(for: url)
         }
         decisionHandler(.allow)
+    }
+
+    /// Detect Cloudflare challenge responses on the main Torn document. After ~2h
+    /// idle the `cf_clearance` cookie expires, so reopening triggers a fresh
+    /// challenge WKWebView can loop on. Logs every challenge (diag) and, when it's
+    /// actually LOOPING, auto-recovers by clearing only the Cloudflare cookies
+    /// (Torn login preserved) + reloading once.
+    func webView(_ webView: WKWebView,
+                 decidePolicyFor navigationResponse: WKNavigationResponse,
+                 decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+        if navigationResponse.isForMainFrame,
+           let resp = navigationResponse.response as? HTTPURLResponse,
+           let host = resp.url?.host, host.contains("torn.com") {
+            let mitigated = (resp.value(forHTTPHeaderField: "cf-mitigated") ?? "").lowercased()
+            let isChallenge = mitigated == "challenge" || resp.statusCode == 403 || resp.statusCode == 503
+            evaluateCloudflare(isChallenge: isChallenge, status: resp.statusCode,
+                               mitigated: mitigated, url: resp.url?.absoluteString ?? "")
+        }
+        decisionHandler(.allow)
+    }
+
+    private func evaluateCloudflare(isChallenge: Bool, status: Int, mitigated: String, url: String) {
+        if isChallenge {
+            cfChallengeActive = true
+            let now = Date()
+            cfChallengeLoads.append(now)
+            cfChallengeLoads = cfChallengeLoads.filter { now.timeIntervalSince($0) < 15 }
+            WebDiag.log("cf-challenge", [
+                "status": status, "mitigated": mitigated,
+                "loadsIn15s": cfChallengeLoads.count, "recoveries": cfRecoveryAttempts,
+            ])
+            // A genuine loop = 3+ challenge documents within 15s. Recover ONCE —
+            // clearing cf cookies again on every loop would itself loop.
+            if cfChallengeLoads.count >= 3 && cfRecoveryAttempts < 1 {
+                cfRecoveryAttempts += 1
+                recoverFromCloudflareLoop()
+            }
+        } else {
+            // Any non-challenge main-frame Torn response means we're through —
+            // clear the latch on the exact complement of the set condition (NOT
+            // just status==200, or a 3xx/redirect would leave scripts suppressed
+            // for the whole session).
+            if cfChallengeActive {
+                WebDiag.log("cf-cleared", ["url": url, "status": status, "afterRecoveries": cfRecoveryAttempts])
+            }
+            cfChallengeActive = false
+            cfChallengeLoads.removeAll()
+            cfRecoveryAttempts = 0
+        }
+    }
+
+    /// Clear ONLY the Cloudflare cookies (`cf_*` / `__cf*`) so the Torn login
+    /// survives, then reload once for a clean fresh challenge.
+    private func recoverFromCloudflareLoop() {
+        guard let store = webView?.configuration.websiteDataStore.httpCookieStore else { return }
+        WebDiag.log("cf-recover", ["action": "clear-cf-cookies+reload"])
+        store.getAllCookies { [weak self] cookies in
+            let cf = cookies.filter { $0.name.hasPrefix("cf_") || $0.name.hasPrefix("__cf") }
+            let group = DispatchGroup()
+            for c in cf { group.enter(); store.delete(c) { group.leave() } }
+            group.notify(queue: .main) {
+                WebDiag.log("cf-recover-done", [
+                    "deleted": cf.count, "names": cf.map(\.name).joined(separator: ","),
+                ])
+                self?.cfChallengeLoads.removeAll()
+                self?.webView?.reload()
+            }
+        }
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
