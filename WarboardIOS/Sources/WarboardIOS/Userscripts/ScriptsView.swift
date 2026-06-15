@@ -89,7 +89,13 @@ final class ScriptsViewModel: ObservableObject {
     }
 
     func update(_ script: Userscript) async {
-        guard let urlStr = script.updateURL ?? script.downloadURL,
+        // Download the FULL script from @downloadURL — NOT @updateURL, which is
+        // often a metadata-only `.meta.js` (used only for the version check in
+        // checkForUpdates). Fetching the .meta.js and saving it as the source
+        // truncated the script to just its metadata block — no body, so the
+        // script silently did nothing (no button / no overlay). This recurred on
+        // every update of any script whose @updateURL is a .meta.js.
+        guard let urlStr = script.downloadURL ?? script.updateURL,
               let u = URL(string: urlStr) else { return }
         isWorking = true; errorMessage = nil
         defer { isWorking = false }
