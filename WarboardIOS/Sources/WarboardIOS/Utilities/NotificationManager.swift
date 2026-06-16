@@ -18,6 +18,7 @@ final class NotificationManager {
         case chainPanic    = "chain_panic"        // ≤ 30 s
         case vaultRequest  = "vault_request"
         case shoutIncoming = "shout_incoming"     // reserved for v0.5
+        case generic       = "generic"            // userscript / webext browser.notifications.create
     }
 
     /// Posts a notification. Title is bolded; body is the line below.

@@ -7,7 +7,8 @@ import WebKit
 ///
 /// Routes by `kind`: `storage` → ExtStorage; `sendMessage` → the background host's
 /// onMessage handlers; `apiFetch` → URLSession (CORS bypass); `tabs.create` →
-/// open-in-app; `alarms`/`notifications`/`action` are Phase-3 stubs.
+/// open-in-app; `notifications.create` → native local notification; `action` is a
+/// Phase-3 stub.
 final class ExtMessageRelay: NSObject, WKScriptMessageHandlerWithReply {
     static let name = "webextBridge"
 
@@ -85,7 +86,9 @@ final class ExtMessageRelay: NSObject, WKScriptMessageHandlerWithReply {
             replyHandler(nil, nil)
         case "alarms":
             handleAlarms(body, replyHandler)
-        case "notifications", "action":
+        case "notifications":
+            handleNotifications(body, replyHandler)
+        case "action":
             replyHandler(nil, nil) // Phase 3
         default:
             replyHandler(nil, "unknown webext kind: \(kind)")
@@ -175,6 +178,24 @@ final class ExtMessageRelay: NSObject, WKScriptMessageHandlerWithReply {
         default:
             reply(nil, nil)
         }
+    }
+
+    /// `browser.notifications.create` → a native local notification via
+    /// NotificationManager. This is the one bridge for ALL in-web-view alerts:
+    /// userscripts (browser.notifications.create), TornTools, and ReTorn — all
+    /// of which post `{kind:'notifications', op:'create', id, opts}` from the
+    /// shim. `clear` is a no-op (the system owns dismissal). Resolves the JS
+    /// promise to the notification id.
+    private func handleNotifications(_ body: [String: Any], _ reply: @escaping (Any?, String?) -> Void) {
+        guard (body["op"] as? String) == "create" else { reply(nil, nil); return }
+        let opts = body["opts"] as? [String: Any] ?? [:]
+        let title = (opts["title"] as? String) ?? "Warboard"
+        let message = (opts["message"] as? String) ?? (opts["body"] as? String) ?? ""
+        let id = (body["id"] as? String) ?? UUID().uuidString
+        DispatchQueue.main.async {
+            NotificationManager.shared.fire(title: title, body: message, category: .generic, id: id)
+        }
+        reply(id, nil)
     }
 
     private static func minutes(_ v: Any?) -> Double {
