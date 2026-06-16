@@ -180,21 +180,22 @@ final class ExtMessageRelay: NSObject, WKScriptMessageHandlerWithReply {
         }
     }
 
-    /// `browser.notifications.create` → a native local notification via
-    /// NotificationManager. This is the one bridge for ALL in-web-view alerts:
-    /// userscripts (browser.notifications.create), TornTools, and ReTorn — all
-    /// of which post `{kind:'notifications', op:'create', id, opts}` from the
-    /// shim. `clear` is a no-op (the system owns dismissal). Resolves the JS
-    /// promise to the notification id.
+    /// `browser.notifications.create` → a native local notification. This is the
+    /// one bridge for ALL in-web-view alerts: userscripts (browser.notifications.
+    /// create), TornTools, and ReTorn — all post `{kind:'notifications', op:'create',
+    /// id, opts}` from the shim. This (WebExt) module can't see NotificationManager
+    /// (app target), so it posts a Foundation `WBExtNotify` event; the app observes
+    /// it (WarboardIOSApp.AppDelegate) and fires via NotificationManager. `clear` is
+    /// a no-op (the system owns dismissal). Resolves the JS promise to the id.
+    static let notifyName = Notification.Name("WBExtNotify")
     private func handleNotifications(_ body: [String: Any], _ reply: @escaping (Any?, String?) -> Void) {
         guard (body["op"] as? String) == "create" else { reply(nil, nil); return }
         let opts = body["opts"] as? [String: Any] ?? [:]
         let title = (opts["title"] as? String) ?? "Warboard"
         let message = (opts["message"] as? String) ?? (opts["body"] as? String) ?? ""
         let id = (body["id"] as? String) ?? UUID().uuidString
-        DispatchQueue.main.async {
-            NotificationManager.shared.fire(title: title, body: message, category: .generic, id: id)
-        }
+        NotificationCenter.default.post(name: Self.notifyName, object: nil,
+                                        userInfo: ["title": title, "body": message, "id": id])
         reply(id, nil)
     }
 

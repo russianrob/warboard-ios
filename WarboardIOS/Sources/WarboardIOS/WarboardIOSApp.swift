@@ -65,6 +65,16 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        // Web-view JS notifications (userscripts' browser.notifications.create,
+        // TornTools, ReTorn) post a Foundation WBExtNotify event from the WebExt
+        // module, which can't see NotificationManager. Fire it natively here.
+        NotificationCenter.default.addObserver(forName: Notification.Name("WBExtNotify"), object: nil, queue: .main) { note in
+            let info = note.userInfo
+            let title = (info?["title"] as? String) ?? "Warboard"
+            let body = (info?["body"] as? String) ?? ""
+            let id = (info?["id"] as? String) ?? UUID().uuidString
+            NotificationManager.shared.fire(title: title, body: body, category: .generic, id: id)
+        }
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, err in
             if let err = err {
                 NSLog("[Warboard] Notification authorization error: \(err.localizedDescription)")
