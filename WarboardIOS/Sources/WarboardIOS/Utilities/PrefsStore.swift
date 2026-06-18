@@ -26,6 +26,7 @@ final class PrefsStore: ObservableObject {
     private static let kNotifyDrug = "warboard.notify.drug"
     private static let kNotifyBooster = "warboard.notify.booster"
     private static let kNotifyMedical = "warboard.notify.medical"
+    private static let kChainLiveActivity = "warboard.chainLiveActivity"
 
     @Published var apiKey: String { didSet { defaults.set(apiKey, forKey: Self.kApiKey) } }
     @Published var baseUrl: String { didSet { defaults.set(baseUrl, forKey: Self.kBaseUrl) } }
@@ -55,6 +56,9 @@ final class PrefsStore: ObservableObject {
     @Published var notifyDrug: Bool { didSet { defaults.set(notifyDrug, forKey: Self.kNotifyDrug) } }
     @Published var notifyBooster: Bool { didSet { defaults.set(notifyBooster, forKey: Self.kNotifyBooster) } }
     @Published var notifyMedical: Bool { didSet { defaults.set(notifyMedical, forKey: Self.kNotifyMedical) } }
+    /// The Dynamic Island / lock-screen chain Live Activity. Off also stops
+    /// the always-on 30 s background chain poll (ChainTickerViewModel). Default ON.
+    @Published var chainLiveActivity: Bool { didSet { defaults.set(chainLiveActivity, forKey: Self.kChainLiveActivity) } }
 
     /// v0.4.60: switched default to App Group-shared UserDefaults so
     /// the home-screen Status widget can read the same prefs the main
@@ -84,6 +88,7 @@ final class PrefsStore: ObservableObject {
         self.notifyDrug = defaults.object(forKey: Self.kNotifyDrug) as? Bool ?? true
         self.notifyBooster = defaults.object(forKey: Self.kNotifyBooster) as? Bool ?? true
         self.notifyMedical = defaults.object(forKey: Self.kNotifyMedical) as? Bool ?? true
+        self.chainLiveActivity = defaults.object(forKey: Self.kChainLiveActivity) as? Bool ?? true
     }
 
     // JWT cache helpers — accessed by AuthRepository, not the UI.

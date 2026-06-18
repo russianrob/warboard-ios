@@ -148,6 +148,14 @@ final class ChainLiveActivityController {
             return
         }
 
+        // User toggled the chain Live Activity off in Settings — never start
+        // one, and tear down any that's running (covers the war-room caller).
+        let prefDefaults = UserDefaults(suiteName: "group.com.tornwar.warboard") ?? .standard
+        if !(prefDefaults.object(forKey: "warboard.chainLiveActivity") as? Bool ?? true) {
+            endAllActivities()
+            return
+        }
+
         // Stale-data rejection: if the chain just broke (we ended an
         // activity within the last 90 s on chain==0), ignore any sync
         // that says chain ≥ 1. It's almost certainly the lagged

@@ -56,6 +56,12 @@ struct SettingsView: View {
                     .font(.caption2).foregroundStyle(.secondary)
             }
 
+            Section("Live Activity") {
+                Toggle("Chain Live Activity", isOn: $prefs.chainLiveActivity)
+                Text("The Dynamic Island / lock-screen chain timer. Turning it off also stops the always-on 30 s background chain poll.")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+
             Section("Links") {
                 Toggle("Open Torn links in-app", isOn: $prefs.linkOpenInApp)
                 Text(prefs.linkOpenInApp

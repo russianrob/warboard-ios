@@ -39,6 +39,19 @@ final class ChainTickerViewModel: ObservableObject {
     func stop() { task?.cancel(); task = nil }
 
     private func tick() async {
+        // Chain Live Activity toggled off in Settings — don't poll chain
+        // and tear down any running activity. Loop stays alive so flipping
+        // the toggle back on resumes polling on the next tick.
+        guard prefs.chainLiveActivity else {
+            inActiveWar = false; chainCurrent = 0
+            timeoutDeadlineMs = 0; cooldownDeadlineMs = 0
+            ChainLiveActivityController.shared.sync(
+                warId: "", enemyName: "", chain: 0,
+                timeoutDeadlineMs: 0, cooldownDeadlineMs: 0,
+                myScore: 0, enemyScore: 0, warEnded: true
+            )
+            return
+        }
         // Anchor preference order:
         //   1. Torn server timestamp from the response (matches Torn's
         //      in-game UI exactly; removes both network RTT AND any
