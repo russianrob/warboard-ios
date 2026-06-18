@@ -166,6 +166,18 @@ final class GMBridge: NSObject, WKScriptMessageHandlerWithReply {
             }
             replyHandler(nil, nil)
 
+        case "notification":
+            // Route GM_notification through the same WBExtNotify bridge
+            // browser.notifications.create uses (this lib target can't see
+            // NotificationManager — the app's AppDelegate observes + fires).
+            let nTitle = (payload["title"] as? String) ?? "Warboard"
+            let nText = (payload["text"] as? String) ?? (payload["body"] as? String) ?? ""
+            let nId = (payload["id"] as? String) ?? UUID().uuidString
+            NotificationCenter.default.post(
+                name: Notification.Name("WBExtNotify"), object: nil,
+                userInfo: ["title": nTitle, "body": nText, "id": nId])
+            replyHandler(nil, nil)
+
         default:
             replyHandler(nil, "unknown action: \(action)")
         }

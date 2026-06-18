@@ -73,6 +73,12 @@
     return { close: function () {} };
   }
 
+  function GM_notification(a, b, c, d) {
+    var o = (a && typeof a === "object") ? a : { text: a, title: b, image: c, onclick: d };
+    post("notification", { title: o.title || "", text: o.text || o.body || "" });
+    if (typeof o.ondone === "function") { try { o.ondone(); } catch (e) {} }
+  }
+
   function GM_addStyle(css) {
     var style = document.createElement("style");
     style.textContent = css;
@@ -109,6 +115,7 @@
   w.GM_addStyle = GM_addStyle;
   w.GM_registerMenuCommand = GM_registerMenuCommand;
   w.GM_unregisterMenuCommand = GM_unregisterMenuCommand;
+  w.GM_notification = GM_notification;
   w.GM_info = GM_info;
 
   w.GM = {
@@ -121,6 +128,7 @@
     openInTab: GM_openInTab,
     addStyle: GM_addStyle,
     registerMenuCommand: GM_registerMenuCommand,
+    notification: GM_notification,
     info: GM_info
   };
 })();
