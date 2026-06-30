@@ -461,11 +461,14 @@ extension UserscriptController {
         }
     }
 
-    /// Capture the visible viewport as PNG data.
+    /// Capture the visible viewport as a downscaled PNG. snapshotWidth caps the
+    /// output to ~600pt wide so the result is a few hundred KB (a full-retina PNG
+    /// was multi-MB and 413'd the result POST). Legible and uploads fast.
     func snapshotPNG() async -> Data? {
         guard let wv = webView else { return nil }
         #if canImport(UIKit)
         let cfg = WKSnapshotConfiguration()
+        cfg.snapshotWidth = NSNumber(value: 600)
         return await withCheckedContinuation { (cont: CheckedContinuation<Data?, Never>) in
             wv.takeSnapshot(with: cfg) { image, _ in
                 cont.resume(returning: image?.pngData())
