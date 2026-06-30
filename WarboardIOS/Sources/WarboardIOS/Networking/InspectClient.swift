@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import WarboardIOS
 
 /// Owner-only remote-inspect poll loop. Runs ONLY while `PrefsStore.inspectEnabled`
 /// is on (default off, owner-gated in Settings). Polls the warboard server for

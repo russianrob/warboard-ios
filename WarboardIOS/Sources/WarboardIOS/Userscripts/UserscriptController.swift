@@ -8,7 +8,7 @@ import UIKit
 /// on every navigation (Approach 1). Pure ordering/selection is delegated to
 /// `UserscriptInjectionPlanner`; this type only does the WebKit wiring.
 @MainActor
-final class UserscriptController: NSObject, ObservableObject {
+public final class UserscriptController: NSObject, ObservableObject {
 
     /// A GM_registerMenuCommand entry the SwiftUI chrome renders. `id` matches
     /// the JS-side menu index so `invokeMenuCommand(_:)` can call back through
@@ -54,7 +54,7 @@ final class UserscriptController: NSObject, ObservableObject {
     /// Process-wide handle to the controller driving the live Browser tab, so a
     /// background loop (InspectClient) can reach the web view for remote inspect.
     /// Set in `makeWebView`; nil when no Browser tab is mounted.
-    static weak var current: UserscriptController?
+    public static weak var current: UserscriptController?
 
     /// A URL we just re-issued via `webView.load(...)` to keep a cross-host
     /// Torn navigation inside this web view (see `decidePolicyFor`). When that
@@ -437,11 +437,11 @@ extension UserscriptController {
 // weak webView (nil when no Browser tab is mounted).
 // Spec: docs/superpowers/specs/2026-06-30-remote-inspect-bridge-design.md
 extension UserscriptController {
-    struct InspectEval { let value: String?; let error: String? }
+    public struct InspectEval { public let value: String?; public let error: String? }
 
     /// Run an operator-supplied JS function body (uses `return`) and hand back
     /// the JSON-stringified result. JS-thrown errors are returned in `error`.
-    func runJS(_ src: String) async -> InspectEval {
+    public func runJS(_ src: String) async -> InspectEval {
         guard let wv = webView else { return InspectEval(value: nil, error: "no web view (Browser tab not open)") }
         // Don't catch inside the page: let JS errors (syntax OR runtime) propagate so
         // callAsyncJavaScript throws and they land uniformly in `error` below — not as
@@ -460,7 +460,7 @@ extension UserscriptController {
     }
 
     /// Capture the visible viewport as PNG data.
-    func snapshotPNG() async -> Data? {
+    public func snapshotPNG() async -> Data? {
         guard let wv = webView else { return nil }
         #if canImport(UIKit)
         let cfg = WKSnapshotConfiguration()
