@@ -76,6 +76,18 @@ struct SettingsView: View {
             if let auth = admin.auth, auth.isOwner {
                 PM2LogsSection(admin: admin, prefs: prefs)
             }
+            if let auth = admin.auth, auth.isOwner {
+                Section("Remote inspect (owner)") {
+                    Toggle("Allow remote inspect", isOn: $prefs.inspectEnabled)
+                    if prefs.inspectEnabled {
+                        Label("LIVE — the agent can read this app's browser and take screenshots.",
+                              systemImage: "dot.radiowaves.left.and.right")
+                            .font(.caption).foregroundColor(.orange)
+                    }
+                    Text("Lets the warboard agent run JS in the in-app browser and capture screenshots over the internet, for debugging. Off by default; auto-turns off after 30 min idle.")
+                        .font(.caption).foregroundColor(.secondary)
+                }
+            }
 
             Section("Browser") {
                 Button(role: .destructive) {

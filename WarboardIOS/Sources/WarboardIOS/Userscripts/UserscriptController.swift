@@ -51,6 +51,11 @@ final class UserscriptController: NSObject, ObservableObject {
     /// menu-command callbacks back into the page.
     private weak var webView: WKWebView?
 
+    /// Process-wide handle to the controller driving the live Browser tab, so a
+    /// background loop (InspectClient) can reach the web view for remote inspect.
+    /// Set in `makeWebView`; nil when no Browser tab is mounted.
+    static weak var current: UserscriptController?
+
     /// A URL we just re-issued via `webView.load(...)` to keep a cross-host
     /// Torn navigation inside this web view (see `decidePolicyFor`). When that
     /// app-initiated load comes back through the delegate we recognize it by
@@ -420,7 +425,53 @@ extension UserscriptController {
         wv.allowsBackForwardNavigationGestures = true
         wv.scrollView.contentInsetAdjustmentBehavior = .always
         self.webView = wv
+        UserscriptController.current = self
         return wv
+    }
+}
+
+// MARK: — Remote inspect bridge (eval + screenshot)
+// Display-only inspection surface used by InspectClient when the owner has
+// enabled the remote-inspect toggle. runJS runs in contentWorld .page so it sees
+// the live, logged-in Torn DOM (same world as the userscripts). Both guard the
+// weak webView (nil when no Browser tab is mounted).
+// Spec: docs/superpowers/specs/2026-06-30-remote-inspect-bridge-design.md
+extension UserscriptController {
+    struct InspectEval { let value: String?; let error: String? }
+
+    /// Run an operator-supplied JS function body (uses `return`) and hand back
+    /// the JSON-stringified result. JS-thrown errors are returned in `error`.
+    func runJS(_ src: String) async -> InspectEval {
+        guard let wv = webView else { return InspectEval(value: nil, error: "no web view (Browser tab not open)") }
+        // Don't catch inside the page: let JS errors (syntax OR runtime) propagate so
+        // callAsyncJavaScript throws and they land uniformly in `error` below — not as
+        // a "successful" result. Success returns the JSON-stringified value.
+        let wrapped = """
+        const __fn = async () => { \(src) };
+        const __v = await __fn();
+        return JSON.stringify(__v === undefined ? null : __v);
+        """
+        do {
+            let r = try await wv.callAsyncJavaScript(wrapped, in: nil, contentWorld: .page)
+            return InspectEval(value: r as? String, error: nil)
+        } catch {
+            return InspectEval(value: nil, error: String(describing: error))
+        }
+    }
+
+    /// Capture the visible viewport as PNG data.
+    func snapshotPNG() async -> Data? {
+        guard let wv = webView else { return nil }
+        #if canImport(UIKit)
+        let cfg = WKSnapshotConfiguration()
+        return await withCheckedContinuation { (cont: CheckedContinuation<Data?, Never>) in
+            wv.takeSnapshot(with: cfg) { image, _ in
+                cont.resume(returning: image?.pngData())
+            }
+        }
+        #else
+        return nil
+        #endif
     }
 }
 

@@ -27,6 +27,8 @@ final class PrefsStore: ObservableObject {
     private static let kNotifyBooster = "warboard.notify.booster"
     private static let kNotifyMedical = "warboard.notify.medical"
     private static let kChainLiveActivity = "warboard.chainLiveActivity"
+    private static let kInspectEnabled = "warboard.inspect.enabled"
+    private static let kInspectArmedAt = "warboard.inspect.armedAt"
 
     @Published var apiKey: String { didSet { defaults.set(apiKey, forKey: Self.kApiKey) } }
     @Published var baseUrl: String { didSet { defaults.set(baseUrl, forKey: Self.kBaseUrl) } }
@@ -59,6 +61,14 @@ final class PrefsStore: ObservableObject {
     /// The Dynamic Island / lock-screen chain Live Activity. Off also stops
     /// the always-on 30 s background chain poll (ChainTickerViewModel). Default ON.
     @Published var chainLiveActivity: Bool { didSet { defaults.set(chainLiveActivity, forKey: Self.kChainLiveActivity) } }
+    /// Owner-only remote-inspect channel. Default OFF: the InspectClient poll
+    /// loop only runs while this is on, and a banner shows while active. See
+    /// docs/superpowers/specs/2026-06-30-remote-inspect-bridge-design.md.
+    @Published var inspectEnabled: Bool { didSet { defaults.set(inspectEnabled, forKey: Self.kInspectEnabled) } }
+    /// Wall-clock epoch (seconds) the inspect channel was last armed / last had a
+    /// command — persisted so the 30-min idle auto-off survives background/foreground
+    /// transitions and restarts. 0 = disarmed.
+    @Published var inspectArmedAt: Double { didSet { defaults.set(inspectArmedAt, forKey: Self.kInspectArmedAt) } }
 
     /// v0.4.60: switched default to App Group-shared UserDefaults so
     /// the home-screen Status widget can read the same prefs the main
@@ -89,6 +99,8 @@ final class PrefsStore: ObservableObject {
         self.notifyBooster = defaults.object(forKey: Self.kNotifyBooster) as? Bool ?? true
         self.notifyMedical = defaults.object(forKey: Self.kNotifyMedical) as? Bool ?? true
         self.chainLiveActivity = defaults.object(forKey: Self.kChainLiveActivity) as? Bool ?? true
+        self.inspectEnabled = defaults.object(forKey: Self.kInspectEnabled) as? Bool ?? false
+        self.inspectArmedAt = defaults.double(forKey: Self.kInspectArmedAt)
     }
 
     // JWT cache helpers — accessed by AuthRepository, not the UI.

@@ -13,6 +13,7 @@ struct WarboardIOSApp: App {
     @StateObject private var prefs: PrefsStore
     @StateObject private var chainTicker: ChainTickerViewModel
     @StateObject private var barReporter = BarReporter()
+    @StateObject private var inspectClient = InspectClient()
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
@@ -26,10 +27,23 @@ struct WarboardIOSApp: App {
             AuthGateView()
                 .environmentObject(prefs)
                 .environmentObject(chainTicker)
+                .overlay(alignment: .top) {
+                    if prefs.inspectEnabled {
+                        Text("🔴 REMOTE INSPECT ON")
+                            .font(.caption2).bold()
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(Color.red.opacity(0.9))
+                            .foregroundColor(.white)
+                            .clipShape(Capsule())
+                            .padding(.top, 2)
+                    }
+                }
                 .task {
                     chainTicker.start()
                     barReporter.bind(prefs: prefs)
                     barReporter.start()
+                    inspectClient.bind(prefs: prefs)
+                    inspectClient.start()
                 }
                 .onChange(of: scenePhase) { _, phase in
                     // Pause the bar reporter when the app is
@@ -39,9 +53,15 @@ struct WarboardIOSApp: App {
                     // keeps the faction's Members view fresh.
                     if phase == .active {
                         barReporter.start()
+                        inspectClient.start()
                     } else {
                         barReporter.stop()
+                        inspectClient.stop()
                     }
+                }
+                .onChange(of: prefs.inspectEnabled) { _, on in
+                    if on { prefs.inspectArmedAt = Date().timeIntervalSince1970; inspectClient.start() }
+                    else { prefs.inspectArmedAt = 0; inspectClient.stop() }
                 }
                 .onOpenURL { url in
                     // Default-browser / shared-link / Universal-Link opens land
