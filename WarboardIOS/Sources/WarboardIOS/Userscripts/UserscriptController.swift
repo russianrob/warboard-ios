@@ -8,7 +8,7 @@ import UIKit
 /// on every navigation (Approach 1). Pure ordering/selection is delegated to
 /// `UserscriptInjectionPlanner`; this type only does the WebKit wiring.
 @MainActor
-public final class UserscriptController: NSObject, ObservableObject {
+final class UserscriptController: NSObject, ObservableObject {
 
     /// A GM_registerMenuCommand entry the SwiftUI chrome renders. `id` matches
     /// the JS-side menu index so `invokeMenuCommand(_:)` can call back through
@@ -50,11 +50,6 @@ public final class UserscriptController: NSObject, ObservableObject {
     /// The web view this controller drives. Set in `makeWebView`; used to call
     /// menu-command callbacks back into the page.
     private weak var webView: WKWebView?
-
-    /// Process-wide handle to the controller driving the live Browser tab, so a
-    /// background loop (InspectClient) can reach the web view for remote inspect.
-    /// Set in `makeWebView`; nil when no Browser tab is mounted.
-    public static weak var current: UserscriptController?
 
     /// A URL we just re-issued via `webView.load(...)` to keep a cross-host
     /// Torn navigation inside this web view (see `decidePolicyFor`). When that
@@ -425,7 +420,14 @@ extension UserscriptController {
         wv.allowsBackForwardNavigationGestures = true
         wv.scrollView.contentInsetAdjustmentBehavior = .always
         self.webView = wv
-        UserscriptController.current = self
+        // Expose this live web view to the app-side InspectClient via the public
+        // InspectBridge (weak self → nil "no web view" once the tab is gone).
+        InspectBridge.shared.run = { [weak self] src in
+            guard let self else { return (nil, "no web view (Browser tab not open)") }
+            let r = await self.runJS(src)
+            return (r.value, r.error)
+        }
+        InspectBridge.shared.snapshot = { [weak self] in await self?.snapshotPNG() }
         return wv
     }
 }
@@ -437,11 +439,11 @@ extension UserscriptController {
 // weak webView (nil when no Browser tab is mounted).
 // Spec: docs/superpowers/specs/2026-06-30-remote-inspect-bridge-design.md
 extension UserscriptController {
-    public struct InspectEval { public let value: String?; public let error: String? }
+    struct InspectEval { let value: String?; let error: String? }
 
     /// Run an operator-supplied JS function body (uses `return`) and hand back
     /// the JSON-stringified result. JS-thrown errors are returned in `error`.
-    public func runJS(_ src: String) async -> InspectEval {
+    func runJS(_ src: String) async -> InspectEval {
         guard let wv = webView else { return InspectEval(value: nil, error: "no web view (Browser tab not open)") }
         // Don't catch inside the page: let JS errors (syntax OR runtime) propagate so
         // callAsyncJavaScript throws and they land uniformly in `error` below — not as
@@ -460,7 +462,7 @@ extension UserscriptController {
     }
 
     /// Capture the visible viewport as PNG data.
-    public func snapshotPNG() async -> Data? {
+    func snapshotPNG() async -> Data? {
         guard let wv = webView else { return nil }
         #if canImport(UIKit)
         let cfg = WKSnapshotConfiguration()
@@ -473,6 +475,21 @@ extension UserscriptController {
         return nil
         #endif
     }
+}
+
+// MARK: — Public remote-inspect surface
+// A minimal public handle so the app-target InspectClient can run JS / screenshot
+// the live Browser WKWebView without exposing the internal UserscriptController.
+// UserscriptController wires these in makeWebView; @MainActor keeps the captured
+// (non-Sendable) controller from ever crossing an actor boundary.
+@MainActor
+public final class InspectBridge {
+    public static let shared = InspectBridge()
+    private init() {}
+    /// Run JS, returning (jsonValue, error). Set while a Browser tab is mounted.
+    public var run: (@MainActor (String) async -> (value: String?, error: String?))?
+    /// Capture the visible viewport as PNG data.
+    public var snapshot: (@MainActor () async -> Data?)?
 }
 
 /// Receives the capture-phase click probe's messages from the page and

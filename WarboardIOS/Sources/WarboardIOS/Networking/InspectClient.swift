@@ -62,7 +62,7 @@ final class InspectClient: ObservableObject {
             // Honor a mid-batch toggle-off / cancel before running each command.
             if Task.isCancelled || !prefs.inspectEnabled { break }
             if c.action == "screenshot" {
-                if let png = await UserscriptController.current?.snapshotPNG() {
+                if let png = (await InspectBridge.shared.snapshot?()) ?? nil {
                     await postResult(baseUrl: prefs.baseUrl, jwt: a.token,
                                      body: ["id": c.id, "png": png.base64EncodedString()])
                 } else {
@@ -70,7 +70,7 @@ final class InspectClient: ObservableObject {
                                      body: ["id": c.id, "error": "no web view (Browser tab not open)"])
                 }
             } else if let js = c.js {
-                let r = await UserscriptController.current?.runJS(js)
+                let r = await InspectBridge.shared.run?(js)
                 var body: [String: String] = ["id": c.id]
                 if let v = r?.value { body["result"] = v }
                 if let e = r?.error ?? (r == nil ? "no web view (Browser tab not open)" : nil) { body["error"] = e }
