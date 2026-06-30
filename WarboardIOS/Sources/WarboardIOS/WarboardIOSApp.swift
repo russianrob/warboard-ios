@@ -60,7 +60,8 @@ struct WarboardIOSApp: App {
                     }
                 }
                 .onChange(of: prefs.inspectEnabled) { _, on in
-                    if on { inspectClient.start() } else { inspectClient.stop() }
+                    if on { prefs.inspectArmedAt = Date().timeIntervalSince1970; inspectClient.start() }
+                    else { prefs.inspectArmedAt = 0; inspectClient.stop() }
                 }
                 .onOpenURL { url in
                     // Default-browser / shared-link / Universal-Link opens land

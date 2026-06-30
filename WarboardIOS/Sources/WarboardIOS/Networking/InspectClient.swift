@@ -7,8 +7,9 @@ import SwiftUI
 /// (`UserscriptController.current`), and posts the results / screenshots back.
 ///
 /// Inspect + JS-driven drive; the operator stays clear of Torn game-actions.
-/// Auth: the app's own owner JWT (server enforces playerId == owner). Auto-turns
-/// the toggle off after an idle window so a forgotten switch can't stay open.
+/// Auth: the app's own owner JWT (server enforces playerId == owner). Idle
+/// auto-off uses a persisted wall-clock (`PrefsStore.inspectArmedAt`) so a
+/// forgotten toggle can't stay armed across background/foreground/restarts.
 /// Spec: docs/superpowers/specs/2026-06-30-remote-inspect-bridge-design.md
 @MainActor
 final class InspectClient: ObservableObject {
@@ -18,7 +19,6 @@ final class InspectClient: ObservableObject {
     private var prefs: PrefsStore?
     private var auth: AuthRepository?
     private var task: Task<Void, Never>?
-    private var lastActivity = Date()
 
     func bind(prefs: PrefsStore) {
         self.prefs = prefs
@@ -29,7 +29,7 @@ final class InspectClient: ObservableObject {
     func start() {
         guard task == nil else { return }
         guard let prefs = prefs, prefs.inspectEnabled else { return }
-        lastActivity = Date()
+        if prefs.inspectArmedAt == 0 { prefs.inspectArmedAt = Date().timeIntervalSince1970 }
         task = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.tick()
@@ -46,25 +46,37 @@ final class InspectClient: ObservableObject {
     private func tick() async {
         guard let prefs = prefs, prefs.inspectEnabled else { stop(); return }
         guard let auth = auth, let a = await auth.ensureAuth(), a.isOwner else { return }
-        if Date().timeIntervalSince(lastActivity) > InspectClient.idleAutoOffSeconds {
+        // Persisted wall-clock idle auto-off — survives background/foreground/restart.
+        let armed = prefs.inspectArmedAt
+        if armed > 0, Date().timeIntervalSince1970 - armed > InspectClient.idleAutoOffSeconds {
             prefs.inspectEnabled = false
+            prefs.inspectArmedAt = 0
             stop()
             return
         }
         let cmds = await fetchCmds(baseUrl: prefs.baseUrl, jwt: a.token)
         if cmds.isEmpty { return }
-        lastActivity = Date()
+        prefs.inspectArmedAt = Date().timeIntervalSince1970
         for c in cmds {
+            // Honor a mid-batch toggle-off / cancel before running each command.
+            if Task.isCancelled || !prefs.inspectEnabled { break }
             if c.action == "screenshot" {
-                let png: Data? = (await UserscriptController.current?.snapshotPNG()) ?? nil
-                await postResult(baseUrl: prefs.baseUrl, jwt: a.token,
-                                 body: ["id": c.id, "png": png?.base64EncodedString() ?? ""])
+                if let png = await UserscriptController.current?.snapshotPNG() {
+                    await postResult(baseUrl: prefs.baseUrl, jwt: a.token,
+                                     body: ["id": c.id, "png": png.base64EncodedString()])
+                } else {
+                    await postResult(baseUrl: prefs.baseUrl, jwt: a.token,
+                                     body: ["id": c.id, "error": "no web view (Browser tab not open)"])
+                }
             } else if let js = c.js {
                 let r = await UserscriptController.current?.runJS(js)
                 var body: [String: String] = ["id": c.id]
                 if let v = r?.value { body["result"] = v }
                 if let e = r?.error ?? (r == nil ? "no web view (Browser tab not open)" : nil) { body["error"] = e }
                 await postResult(baseUrl: prefs.baseUrl, jwt: a.token, body: body)
+            } else {
+                await postResult(baseUrl: prefs.baseUrl, jwt: a.token,
+                                 body: ["id": c.id, "error": "unrecognized command"])
             }
         }
     }

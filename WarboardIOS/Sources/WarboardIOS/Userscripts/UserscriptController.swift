@@ -443,16 +443,16 @@ extension UserscriptController {
     /// the JSON-stringified result. JS-thrown errors are returned in `error`.
     func runJS(_ src: String) async -> InspectEval {
         guard let wv = webView else { return InspectEval(value: nil, error: "no web view (Browser tab not open)") }
+        // Don't catch inside the page: let JS errors (syntax OR runtime) propagate so
+        // callAsyncJavaScript throws and they land uniformly in `error` below — not as
+        // a "successful" result. Success returns the JSON-stringified value.
         let wrapped = """
         const __fn = async () => { \(src) };
-        let __v;
-        try { __v = await __fn(); }
-        catch (e) { return JSON.stringify({ __inspectError: String((e && e.message) || e) }); }
-        try { return JSON.stringify(__v === undefined ? null : __v); }
-        catch (e) { return String(__v); }
+        const __v = await __fn();
+        return JSON.stringify(__v === undefined ? null : __v);
         """
         do {
-            let r = try await wv.callAsyncJavaScript(wrapped, arguments: [:], in: nil, contentWorld: .page)
+            let r = try await wv.callAsyncJavaScript(wrapped, in: nil, contentWorld: .page)
             return InspectEval(value: r as? String, error: nil)
         } catch {
             return InspectEval(value: nil, error: String(describing: error))
