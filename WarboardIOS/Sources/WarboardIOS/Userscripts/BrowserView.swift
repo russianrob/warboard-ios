@@ -90,6 +90,20 @@ final class BrowserModel: ObservableObject {
         guard let wv = webView else { return }
         if isLoading { wv.stopLoading() } else { wv.reload() }
     }
+
+    /// Capture the visible web content at native resolution (no downscale) as a
+    /// PNG for the share-screenshot button. Only the web content is captured —
+    /// not the SwiftUI URL bar / toolbar. nil if the web view isn't mounted or
+    /// the snapshot fails.
+    func captureFullPNG() async -> Data? {
+        guard let wv = webView else { return nil }
+        let cfg = WKSnapshotConfiguration()
+        return await withCheckedContinuation { (cont: CheckedContinuation<Data?, Never>) in
+            wv.takeSnapshot(with: cfg) { image, _ in
+                cont.resume(returning: image?.pngData())
+            }
+        }
+    }
 }
 
 /// Routes an OS-delivered URL (default-browser open, shared link, Universal
@@ -102,6 +116,22 @@ public final class BrowserRouter: ObservableObject {
     @Published public var pendingURL: URL?
     private init() {}
     public func open(_ url: URL) { pendingURL = url }
+}
+
+/// Identifiable wrapper so `.sheet(item:)` can present the iOS share sheet for a
+/// freshly uploaded screenshot URL.
+private struct ShareItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+/// Minimal `UIActivityViewController` wrapper for sharing the screenshot link.
+private struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+    func updateUIViewController(_ vc: UIActivityViewController, context: Context) {}
 }
 
 /// Bridges the WKWebView into SwiftUI and wires the UserscriptController
@@ -232,6 +262,10 @@ public struct BrowserView: View {
     /// Gates the owner-only agent-chat toolbar button — the framework can't
     /// import PrefsStore, so the app target computes this and passes it in.
     private let isOwner: Bool
+    /// Owner-only: upload a captured PNG of the Torn page and return the public
+    /// share URL. Lives in the app target (needs PrefsStore for baseUrl + JWT),
+    /// so it arrives as a closure like the others.
+    private let onUploadScreenshot: ((Data) async -> String?)?
     public init(personalItems: [QuickItem] = [],
                 factionItems: [QuickItem] = [],
                 onEditQuickItems: ((Bool) -> Void)? = nil,
@@ -241,6 +275,7 @@ public struct BrowserView: View {
                 onShowWarPayouts: (() -> Void)? = nil,
                 onShowAgentChat: (() -> Void)? = nil,
                 onShowExtOptions: ((ExtOptionsTarget) -> Void)? = nil,
+                onUploadScreenshot: ((Data) async -> String?)? = nil,
                 isOwner: Bool = false) {
         self.personalItems = personalItems
         self.factionItems = factionItems
@@ -251,12 +286,15 @@ public struct BrowserView: View {
         self.onShowWarPayouts = onShowWarPayouts
         self.onShowAgentChat = onShowAgentChat
         self.onShowExtOptions = onShowExtOptions
+        self.onUploadScreenshot = onUploadScreenshot
         self.isOwner = isOwner
     }
     @StateObject private var model = BrowserModel()
     @State private var showScripts = false
     @State private var toast: String?
     @State private var confirmClearData = false
+    @State private var shareItem: ShareItem?
+    @State private var sharingBusy = false
     @ObservedObject private var extUpdates = ExtensionUpdateStore.shared
     @FocusState private var addrFocused: Bool
 
@@ -304,6 +342,9 @@ public struct BrowserView: View {
         }
         .sheet(item: $controller.pendingInstall) { item in
             InstallScriptView(url: item.url) { controller.pendingInstall = nil }
+        }
+        .sheet(item: $shareItem) { item in
+            ShareSheet(items: [item.url])
         }
         .confirmationDialog("Clear web data?", isPresented: $confirmClearData, titleVisibility: .visible) {
             Button("Clear (logs you out of Torn)", role: .destructive) {
@@ -476,6 +517,14 @@ public struct BrowserView: View {
                 }
             }
 
+            // Owner-only: screenshot the Torn page + upload for a shareable link.
+            if isOwner, onUploadScreenshot != nil {
+                Button { captureAndShare() } label: {
+                    Image(systemName: sharingBusy ? "camera.fill" : "camera")
+                }
+                .disabled(sharingBusy)
+            }
+
             // Manage installed userscripts (moved here from the old top bar so
             // the web view gets that whole row back).
             Button { showScripts = true } label: {
@@ -583,6 +632,28 @@ public struct BrowserView: View {
         }
         // Non-JSON (likely the full HTML page) -> the AJAX use didn't go through.
         return "Couldn't use \(item.name) — open the Items page once, then retry"
+    }
+
+    /// Capture the current Torn page, upload it, copy the returned share link to
+    /// the clipboard, and offer the iOS share sheet. Owner-only — the button that
+    /// calls this is gated on `isOwner` + a non-nil uploader.
+    private func captureAndShare() {
+        guard let upload = onUploadScreenshot, !sharingBusy else { return }
+        sharingBusy = true
+        Task { @MainActor in
+            defer { sharingBusy = false }
+            guard let png = await model.captureFullPNG() else {
+                showToast("Couldn't capture page"); return
+            }
+            showToast("Uploading…")
+            if let urlStr = await upload(png), let url = URL(string: urlStr) {
+                UIPasteboard.general.string = urlStr
+                showToast("Link copied")
+                shareItem = ShareItem(url: url)
+            } else {
+                showToast("Upload failed")
+            }
+        }
     }
 
     private func showToast(_ message: String) {

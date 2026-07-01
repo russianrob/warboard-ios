@@ -1,5 +1,6 @@
 import SwiftUI
 import WarboardIOS
+import Foundation
 
 /// App shell: a full-screen in-app Torn browser hosting the userscript
 /// engine. Script management is reached from the browser's URL bar, so the
@@ -36,6 +37,9 @@ struct ContentView: View {
             onShowWarPayouts: { showWarPayouts = true },
             onShowAgentChat: { showAgentChat = true },
             onShowExtOptions: { extOptionsTarget = $0 },
+            onUploadScreenshot: { data in
+                await uploadScreenshot(data, baseUrl: prefs.baseUrl, jwt: prefs.cachedJwt()?.token)
+            },
             isOwner: prefs.cachedJwt()?.isOwner == true
         )
         // App-wide shout banner — listens to RealtimeClient.globalToast
@@ -74,4 +78,26 @@ struct ContentView: View {
             NavigationStack { ExtPageView(extId: target.extId, page: target.page, title: target.title) }
         }
     }
+}
+
+/// POST a PNG screenshot to the owner-only `/api/screenshot` endpoint; returns
+/// the public share URL (gyazo-style) or nil on failure. Lives here (app target)
+/// so it can read `prefs.baseUrl` + the owner JWT, which the framework can't.
+private func uploadScreenshot(_ png: Data, baseUrl: String, jwt: String?) async -> String? {
+    guard let jwt, !jwt.isEmpty else { return nil }
+    let base = baseUrl.hasSuffix("/") ? String(baseUrl.dropLast()) : baseUrl
+    guard let url = URL(string: base + "/api/screenshot") else { return nil }
+    var req = URLRequest(url: url)
+    req.httpMethod = "POST"
+    req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+    req.httpBody = try? JSONSerialization.data(withJSONObject: ["png": png.base64EncodedString()])
+    guard req.httpBody != nil else { return nil }
+    do {
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse, http.statusCode == 200,
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let urlStr = obj["url"] as? String else { return nil }
+        return urlStr
+    } catch { return nil }
 }
