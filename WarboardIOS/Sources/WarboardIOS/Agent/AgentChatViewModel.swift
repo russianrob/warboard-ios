@@ -49,7 +49,12 @@ final class AgentChatViewModel: ObservableObject {
     /// ContentView) so the transcript survives closing/reopening the sheet.
     var client: AgentClient? = nil
 
-    init() {
+    /// The on-device userscript store — read to send the installed manifest and
+    /// written when the owner approves a proposal.
+    let registry: ScriptRegistry
+
+    init(registry: ScriptRegistry = .shared) {
+        self.registry = registry
         if let saved = AgentChatStore.load() {
             messages = saved.messages
             sessionId = saved.sessionId
@@ -68,9 +73,10 @@ final class AgentChatViewModel: ObservableObject {
         deployStatus = nil
         messages.append(ChatMessage(role: .user, text: text))
         let outgoing = sessionId
+        let manifest = InstalledManifest.build(from: registry.all()).asJSONBody()
         Task { [weak self] in
             guard let self else { return }
-            await self.drive(client.stream(text: text, sessionId: outgoing))
+            await self.drive(client.stream(text: text, sessionId: outgoing, installedScripts: manifest))
             self.busy = false
             self.persist()
         }
@@ -82,9 +88,10 @@ final class AgentChatViewModel: ObservableObject {
         guard let js = pendingInspect, let client = client, let sid = sessionId, !busy else { return }
         pendingInspect = nil
         busy = true
+        let manifest = InstalledManifest.build(from: registry.all()).asJSONBody()
         Task { [weak self] in
             guard let self else { return }
-            await self.drive(client.inspect(js: js, sessionId: sid))
+            await self.drive(client.inspect(js: js, sessionId: sid, installedScripts: manifest))
             self.busy = false
             self.persist()
         }
@@ -96,9 +103,10 @@ final class AgentChatViewModel: ObservableObject {
         guard pendingInspect != nil, let client = client, let sid = sessionId, !busy else { return }
         pendingInspect = nil
         busy = true
+        let manifest = InstalledManifest.build(from: registry.all()).asJSONBody()
         Task { [weak self] in
             guard let self else { return }
-            await self.drive(client.stream(text: "(Owner declined to run that inspection query. Answer without it.)", sessionId: sid))
+            await self.drive(client.stream(text: "(Owner declined to run that inspection query. Answer without it.)", sessionId: sid, installedScripts: manifest))
             self.busy = false
             self.persist()
         }
@@ -150,16 +158,21 @@ final class AgentChatViewModel: ObservableObject {
     func deployProposal() {
         guard let draft = pendingProposal, !deploying, let client = client else { return }
         deploying = true
-        deployStatus = "Deploying \(draft.filename)…"
+        deployStatus = "Installing \(draft.filename)…"
 
         Task { [weak self] in
             guard let self else { return }
             let result = await client.deploy(filename: draft.filename, content: draft.content)
-            if result.ok {
-                self.deployStatus = result.message
+            let downloadURL = client.baseUrl + "/scripts/" + draft.filename
+            do {
+                try await LocalInstaller(registry: self.registry)
+                    .install(filename: draft.filename, content: draft.content, downloadURL: downloadURL)
+                self.deployStatus = "Installed \(draft.filename) — reload the Torn page to see it."
+                    + (result.ok ? "" : " (server backup failed: \(result.message))")
                 self.pendingProposal = nil
-            } else {
-                self.deployStatus = "Deploy failed: \(result.message)"
+            } catch {
+                self.deployStatus = "Couldn't install \(draft.filename): \(error.localizedDescription)"
+                    + (result.ok ? " (saved to your server collection)" : "")
             }
             self.deploying = false
         }

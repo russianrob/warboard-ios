@@ -168,7 +168,7 @@ struct AgentChatView: View {
                 } label: {
                     HStack(spacing: 6) {
                         if vm.deploying { ProgressView().scaleEffect(0.7) }
-                        Text(vm.deploying ? "Deploying…" : "Apply & deploy")
+                        Text(vm.deploying ? "Installing…" : "Approve & install")
                     }
                     .font(.caption).bold()
                 }
