@@ -214,6 +214,9 @@ public struct BrowserView: View {
     /// Opens the app's native War Payouts screen — the most-recent ended
     /// war's owed cuts (same framework→app closure pattern).
     private let onShowWarPayouts: (() -> Void)?
+    /// Opens the owner-only in-app agent chat (same framework→app closure
+    /// pattern). The toolbar button is gated on `isOwner`.
+    private let onShowAgentChat: (() -> Void)?
     /// Presents an extension's options page in a sheet, for the extension that
     /// asked. The ⋯ menu items and the in-page "Options" button
     /// (runtime.openOptionsPage) both route here.
@@ -225,6 +228,10 @@ public struct BrowserView: View {
     private let personalItems: [QuickItem]
     private let factionItems: [QuickItem]
     private let onEditQuickItems: ((Bool) -> Void)?
+    /// True when the signed-in user is the warboard owner (playerId 137558).
+    /// Gates the owner-only agent-chat toolbar button — the framework can't
+    /// import PrefsStore, so the app target computes this and passes it in.
+    private let isOwner: Bool
     public init(personalItems: [QuickItem] = [],
                 factionItems: [QuickItem] = [],
                 onEditQuickItems: ((Bool) -> Void)? = nil,
@@ -232,7 +239,9 @@ public struct BrowserView: View {
                 onShowWarRoom: (() -> Void)? = nil,
                 onShowOCManager: (() -> Void)? = nil,
                 onShowWarPayouts: (() -> Void)? = nil,
-                onShowExtOptions: ((ExtOptionsTarget) -> Void)? = nil) {
+                onShowAgentChat: (() -> Void)? = nil,
+                onShowExtOptions: ((ExtOptionsTarget) -> Void)? = nil,
+                isOwner: Bool = false) {
         self.personalItems = personalItems
         self.factionItems = factionItems
         self.onEditQuickItems = onEditQuickItems
@@ -240,7 +249,9 @@ public struct BrowserView: View {
         self.onShowWarRoom = onShowWarRoom
         self.onShowOCManager = onShowOCManager
         self.onShowWarPayouts = onShowWarPayouts
+        self.onShowAgentChat = onShowAgentChat
         self.onShowExtOptions = onShowExtOptions
+        self.isOwner = isOwner
     }
     @StateObject private var model = BrowserModel()
     @State private var showScripts = false
@@ -455,6 +466,14 @@ public struct BrowserView: View {
                 }
             } label: {
                 Image(systemName: "ellipsis.circle")
+            }
+
+            // Owner-only agent chat. Sits next to the Scripts button because
+            // the agent's job is proposing/deploying userscript changes.
+            if isOwner, let onShowAgentChat {
+                Button { onShowAgentChat() } label: {
+                    Image(systemName: "sparkles")
+                }
             }
 
             // Manage installed userscripts (moved here from the old top bar so
