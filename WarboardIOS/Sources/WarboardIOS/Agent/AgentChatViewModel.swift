@@ -1,13 +1,13 @@
 import Foundation
 import Combine
 
-enum ChatRole {
+enum ChatRole: String, Codable {
     case user
     case assistant
 }
 
-struct ChatMessage: Identifiable, Equatable {
-    let id = UUID()
+struct ChatMessage: Identifiable, Equatable, Codable {
+    var id = UUID()
     let role: ChatRole
     var text: String
 }
@@ -45,7 +45,12 @@ final class AgentChatViewModel: ObservableObject {
     /// ContentView) so the transcript survives closing/reopening the sheet.
     var client: AgentClient? = nil
 
-    init() {}
+    init() {
+        if let saved = AgentChatStore.load() {
+            messages = saved.messages
+            sessionId = saved.sessionId
+        }
+    }
 
     func send() {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -82,6 +87,7 @@ final class AgentChatViewModel: ObservableObject {
                 }
             }
             self.busy = false
+            self.persist()
         }
     }
 
@@ -103,5 +109,23 @@ final class AgentChatViewModel: ObservableObject {
             }
             self.deploying = false
         }
+    }
+
+    /// Persist the current transcript + session id so the conversation (and the
+    /// agent's server-side memory, reached via `--resume`) survives an app
+    /// relaunch. Called at the end of each turn.
+    private func persist() {
+        AgentChatStore.save(PersistedChat(sessionId: sessionId, messages: messages))
+    }
+
+    /// Start a fresh conversation: clear the transcript and drop the session id
+    /// so the next turn opens a new server-side session.
+    func newChat() {
+        messages = []
+        sessionId = nil
+        pendingProposal = nil
+        deployStatus = nil
+        input = ""
+        AgentChatStore.clear()
     }
 }

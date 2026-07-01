@@ -15,6 +15,7 @@ struct AgentChatView: View {
     // Owned by ContentView (long-lived) and passed in, so the transcript
     // survives closing + reopening the sheet.
     @ObservedObject var vm: AgentChatViewModel
+    @State private var confirmNewChat = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -31,6 +32,22 @@ struct AgentChatView: View {
         }
         .navigationTitle("Agent")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    if vm.messages.isEmpty { vm.newChat() } else { confirmNewChat = true }
+                } label: {
+                    Image(systemName: "square.and.pencil")
+                }
+                .disabled(vm.busy)
+                .accessibilityLabel("New chat")
+            }
+        }
+        .confirmationDialog("Start a new chat? This clears the current conversation.",
+                            isPresented: $confirmNewChat, titleVisibility: .visible) {
+            Button("New chat", role: .destructive) { vm.newChat() }
+            Button("Cancel", role: .cancel) { }
+        }
         .onAppear {
             prefs.inspectEnabled = true                       // arm the inspect loop (server snapshots)
             UIApplication.shared.isIdleTimerDisabled = true   // keep-awake while chatting
