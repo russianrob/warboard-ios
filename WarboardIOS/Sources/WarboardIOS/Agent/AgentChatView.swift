@@ -16,6 +16,7 @@ struct AgentChatView: View {
     // survives closing + reopening the sheet.
     @ObservedObject var vm: AgentChatViewModel
     @State private var confirmNewChat = false
+    @State private var showProposalCode = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -51,6 +52,19 @@ struct AgentChatView: View {
             Button("New chat", role: .destructive) { vm.newChat() }
             Button("Cancel", role: .cancel) { }
         }
+        .sheet(isPresented: $showProposalCode) {
+            if let draft = vm.pendingProposal {
+                NavigationStack {
+                    ScrollView {
+                        SelectableText(text: draft.content)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding()
+                    }
+                    .navigationTitle(draft.filename)
+                    .navigationBarTitleDisplayMode(.inline)
+                }
+            }
+        }
         .onAppear {
             prefs.inspectEnabled = true                       // arm the inspect loop (server snapshots)
             UIApplication.shared.isIdleTimerDisabled = true   // keep-awake while chatting
@@ -69,7 +83,7 @@ struct AgentChatView: View {
                             Text(m.role == .user ? "You" : "Agent")
                                 .font(.caption2).bold()
                                 .foregroundStyle(m.role == .user ? Color.accentColor : Color.secondary)
-                            SelectableText(text: m.text.isEmpty ? "…" : m.text)
+                            SelectableText(text: m.role == .assistant ? displayText(m.text) : m.text)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .id(m.id)
@@ -84,6 +98,34 @@ struct AgentChatView: View {
                 if let last = vm.messages.last { proxy.scrollTo(last.id, anchor: .bottom) }
             }
         }
+    }
+
+    /// The text to SHOW for a message: hides the agent's machine protocol blocks
+    /// so the raw proposed file / inspect JS goes to its card instead of
+    /// cluttering (and being copied out of) the chat. `===FILE:` / `===INSPECT===`
+    /// are terminal — cut from the marker on; `===SOURCE:` is a mid-message
+    /// request the server auto-fulfills — strip just that marker.
+    private func displayText(_ raw: String) -> String {
+        guard raw.contains("===") else {                       // fast path: no markers
+            let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            return t.isEmpty ? "…" : t
+        }
+        var text = raw
+        // ===FILE: / ===INSPECT=== are terminal blocks at LINE START; cut from the
+        // first one on. `range(of:)` stops in the prose, so a big streamed file is
+        // never scanned (avoids O(n^2) over a proposal's deltas).
+        if let r = text.range(of: "(?m)^(===FILE:|===INSPECT===)", options: .regularExpression) {
+            text = String(text[..<r.lowerBound])
+        }
+        // ===SOURCE: is a mid-message marker the server auto-fulfills; strip the
+        // line-start marker only (keep the agent's answer after it). Runs on the
+        // already-truncated prefix, not the whole message.
+        text = text.replacingOccurrences(
+            of: "(?m)^===SOURCE:[^\\n=]*===",
+            with: "",
+            options: .regularExpression)
+        let result = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return result.isEmpty ? "…" : result
     }
 
     private var statusBar: some View {
@@ -108,29 +150,37 @@ struct AgentChatView: View {
     }
 
     /// Owner confirmation card for a proposed userscript change. Shown only
-    /// while `vm.pendingProposal` is set; the actual file is in the transcript
-    /// message above. Styling mirrors `statusBar` (semantic colors, caption).
+    /// while `vm.pendingProposal` is set. The raw file is NOT in the transcript
+    /// (kept out of chat); "View file" opens it in a sheet. Styling mirrors
+    /// `statusBar` (semantic colors, caption).
     private func proposalCard(_ draft: ProposalDraft) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Label("Proposed change · \(draft.filename)", systemImage: "doc.badge.gearshape")
                 .font(.caption).bold()
                 .foregroundStyle(Color.primary)
                 .lineLimit(1)
-            Text("Review the full file in the message above before deploying.")
+            Text("The full file is kept out of the chat — apply it, or view the file first.")
                 .font(.caption2)
                 .foregroundStyle(Color.secondary)
-            Button {
-                vm.deployProposal()
-            } label: {
-                HStack(spacing: 6) {
-                    if vm.deploying { ProgressView().scaleEffect(0.7) }
-                    Text(vm.deploying ? "Deploying…" : "Apply & deploy")
+            HStack(spacing: 8) {
+                Button {
+                    vm.deployProposal()
+                } label: {
+                    HStack(spacing: 6) {
+                        if vm.deploying { ProgressView().scaleEffect(0.7) }
+                        Text(vm.deploying ? "Deploying…" : "Apply & deploy")
+                    }
+                    .font(.caption).bold()
                 }
-                .font(.caption).bold()
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .disabled(vm.deploying)
+                Button { showProposalCode = true } label: {
+                    Text("View file").font(.caption)
+                }
+                .controlSize(.small)
+                .disabled(vm.deploying)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
-            .disabled(vm.deploying)
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
