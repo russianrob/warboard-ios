@@ -12,11 +12,9 @@ import UIKit
 /// still need it); it also auto-disarms after 30 min idle via `InspectClient`.
 struct AgentChatView: View {
     @EnvironmentObject private var prefs: PrefsStore
-    @StateObject private var vm: AgentChatViewModel
-
-    init(client: AgentClient) {
-        _vm = StateObject(wrappedValue: AgentChatViewModel(client: client))
-    }
+    // Owned by ContentView (long-lived) and passed in, so the transcript
+    // survives closing + reopening the sheet.
+    @ObservedObject var vm: AgentChatViewModel
 
     var body: some View {
         VStack(spacing: 0) {

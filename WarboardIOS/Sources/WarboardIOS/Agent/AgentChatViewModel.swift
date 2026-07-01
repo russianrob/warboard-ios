@@ -40,15 +40,16 @@ final class AgentChatViewModel: ObservableObject {
 
     /// Latest Claude session id — echoed back on the next turn for continuity.
     private var sessionId: String? = nil
-    private let client: AgentClient
+    /// Set by the presenter (ContentView) each time the chat opens, carrying the
+    /// current owner JWT. The view model itself is long-lived (owned by
+    /// ContentView) so the transcript survives closing/reopening the sheet.
+    var client: AgentClient? = nil
 
-    init(client: AgentClient) {
-        self.client = client
-    }
+    init() {}
 
     func send() {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, !busy else { return }
+        guard !text.isEmpty, !busy, let client = client else { return }
         input = ""
         busy = true
         messages.append(ChatMessage(role: .user, text: text))
@@ -58,7 +59,7 @@ final class AgentChatViewModel: ObservableObject {
 
         Task { [weak self] in
             guard let self else { return }
-            for await ev in self.client.stream(text: text, sessionId: outgoing) {
+            for await ev in client.stream(text: text, sessionId: outgoing) {
                 switch ev {
                 case .delta(let chunk):
                     if idx < self.messages.count { self.messages[idx].text += chunk }
@@ -87,13 +88,13 @@ final class AgentChatViewModel: ObservableObject {
     /// Apply the pending proposal by POSTing it to the deploy endpoint, then
     /// surface the outcome via `deployStatus`. Clears the proposal on success.
     func deployProposal() {
-        guard let draft = pendingProposal, !deploying else { return }
+        guard let draft = pendingProposal, !deploying, let client = client else { return }
         deploying = true
         deployStatus = "Deploying \(draft.filename)…"
 
         Task { [weak self] in
             guard let self else { return }
-            let result = await self.client.deploy(filename: draft.filename, content: draft.content)
+            let result = await client.deploy(filename: draft.filename, content: draft.content)
             if result.ok {
                 self.deployStatus = result.message
                 self.pendingProposal = nil

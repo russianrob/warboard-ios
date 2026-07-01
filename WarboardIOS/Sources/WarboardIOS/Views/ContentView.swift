@@ -19,6 +19,8 @@ struct ContentView: View {
     @State private var showAgentChat = false
     @State private var extOptionsTarget: ExtOptionsTarget?
     @StateObject private var quickItems = QuickItemsStore()
+    // Long-lived so the agent chat transcript + session survive closing/reopening the sheet.
+    @StateObject private var agentChatVM = AgentChatViewModel()
 
     var body: some View {
         BrowserView(
@@ -62,9 +64,10 @@ struct ContentView: View {
         .sheet(isPresented: $showAgentChat) {
             if let auth = prefs.cachedJwt() {
                 NavigationStack {
-                    AgentChatView(client: AgentClient(baseUrl: prefs.baseUrl, jwt: auth.token))
+                    AgentChatView(vm: agentChatVM)
                 }
                 .environmentObject(prefs)
+                .onAppear { agentChatVM.client = AgentClient(baseUrl: prefs.baseUrl, jwt: auth.token) }
             }
         }
         .fullScreenCover(item: $extOptionsTarget) { target in
