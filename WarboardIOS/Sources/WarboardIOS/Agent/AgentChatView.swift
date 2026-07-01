@@ -277,16 +277,24 @@ private struct SelectableText: UIViewRepresentable {
         tv.backgroundColor = .clear
         tv.textContainerInset = .zero
         tv.textContainer.lineFragmentPadding = 0
+        tv.textContainer.lineBreakMode = .byWordWrapping
         tv.adjustsFontForContentSizeCategory = true
         tv.font = UIFont.monospacedSystemFont(
             ofSize: UIFont.preferredFont(forTextStyle: .callout).pointSize, weight: .regular)
         tv.textColor = .label
-        tv.setContentCompressionResistancePriority(.required, for: .vertical)
-        tv.setContentHuggingPriority(.required, for: .vertical)
         return tv
     }
 
     func updateUIView(_ tv: UITextView, context: Context) {
         if tv.text != text { tv.text = text }
+    }
+
+    // Wrap at the width SwiftUI proposes and report the height needed. Without
+    // this, a non-scrolling UITextView reports its (unbounded) intrinsic width,
+    // so long lines run off-screen instead of wrapping.
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
+        let width = proposal.width ?? UIScreen.main.bounds.width
+        let fitted = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+        return CGSize(width: width, height: ceil(fitted.height))
     }
 }
