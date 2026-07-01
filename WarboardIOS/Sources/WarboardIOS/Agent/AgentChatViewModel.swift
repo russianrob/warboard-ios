@@ -94,12 +94,11 @@ final class AgentChatViewModel: ObservableObject {
         Task { [weak self] in
             guard let self else { return }
             let result = await self.client.deploy(filename: draft.filename, content: draft.content)
-            switch result {
-            case .success(let msg):
-                self.deployStatus = msg
+            if result.ok {
+                self.deployStatus = result.message
                 self.pendingProposal = nil
-            case .failure(let err):
-                self.deployStatus = "Deploy failed: \(err)"
+            } else {
+                self.deployStatus = "Deploy failed: \(result.message)"
             }
             self.deploying = false
         }

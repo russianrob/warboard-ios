@@ -63,12 +63,12 @@ struct AgentClient {
     }
 
     /// Apply + deploy a proposed userscript change via the owner-gated
-    /// `POST <baseUrl>/api/agent/deploy`. Returns `.success` with a short
-    /// human-readable confirmation (including the served version when the
-    /// server reports one) or `.failure` with an error message to surface.
-    func deploy(filename: String, content: String) async -> Result<String, String> {
+    /// `POST <baseUrl>/api/agent/deploy`. Returns `(ok, message)` — a short
+    /// human-readable confirmation (with the served version when the server
+    /// reports one) on success, or an error message to surface on failure.
+    func deploy(filename: String, content: String) async -> (ok: Bool, message: String) {
         guard let url = URL(string: baseUrl + "/api/agent/deploy") else {
-            return .failure("bad server URL")
+            return (ok: false, message: "bad server URL")
         }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
@@ -87,11 +87,11 @@ struct AgentClient {
                 if let version = json?["version"] as? String, !version.isEmpty {
                     msg += " v\(version)"
                 }
-                return .success(msg)
+                return (ok: true, message: msg)
             }
-            return .failure(json?["error"] as? String ?? "HTTP \(code)")
+            return (ok: false, message: json?["error"] as? String ?? "HTTP \(code)")
         } catch {
-            return .failure(error.localizedDescription)
+            return (ok: false, message: error.localizedDescription)
         }
     }
 }
