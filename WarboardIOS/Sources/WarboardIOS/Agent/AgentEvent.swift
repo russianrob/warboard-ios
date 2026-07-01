@@ -19,6 +19,8 @@ enum AgentEvent: Equatable {
     case thinking
     /// Turn complete.
     case done(ok: Bool, result: String)
+    /// The agent proposes a full userscript file the user can apply + deploy.
+    case proposal(filename: String, content: String)
     /// Stream finished — stop reading.
     case end
     /// Surface to the user.
@@ -47,6 +49,8 @@ func parseAgentSSE(_ dataPayload: String) -> AgentEvent? {
     case "thinking": return .thinking
     case "done":     return .done(ok: o["ok"] as? Bool ?? false,
                                   result: o["result"] as? String ?? "")
+    case "proposal": return .proposal(filename: o["filename"] as? String ?? "",
+                                      content: o["content"] as? String ?? "")
     case "end":      return .end
     case "error":    return .error(o["message"] as? String ?? "error")
     case "stderr":   return .stderr(o["text"] as? String ?? "")

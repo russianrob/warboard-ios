@@ -61,4 +61,37 @@ struct AgentClient {
             continuation.onTermination = { _ in task.cancel() }
         }
     }
+
+    /// Apply + deploy a proposed userscript change via the owner-gated
+    /// `POST <baseUrl>/api/agent/deploy`. Returns `.success` with a short
+    /// human-readable confirmation (including the served version when the
+    /// server reports one) or `.failure` with an error message to surface.
+    func deploy(filename: String, content: String) async -> Result<String, String> {
+        guard let url = URL(string: baseUrl + "/api/agent/deploy") else {
+            return .failure("bad server URL")
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let body: [String: Any] = ["filename": filename, "content": content]
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        req.timeoutInterval = 120
+
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            if code == 200, json?["ok"] as? Bool == true {
+                var msg = "Deployed \(filename)"
+                if let version = json?["version"] as? String, !version.isEmpty {
+                    msg += " v\(version)"
+                }
+                return .success(msg)
+            }
+            return .failure(json?["error"] as? String ?? "HTTP \(code)")
+        } catch {
+            return .failure(error.localizedDescription)
+        }
+    }
 }

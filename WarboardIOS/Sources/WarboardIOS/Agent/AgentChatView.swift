@@ -22,6 +22,12 @@ struct AgentChatView: View {
         VStack(spacing: 0) {
             transcript
             statusBar
+            if let proposal = vm.pendingProposal {
+                proposalCard(proposal)
+            }
+            if let status = vm.deployStatus {
+                deployStatusCaption(status)
+            }
             Divider()
             inputBar
         }
@@ -83,6 +89,55 @@ struct AgentChatView: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 4)
+    }
+
+    /// Owner confirmation card for a proposed userscript change. Shown only
+    /// while `vm.pendingProposal` is set; the actual file is in the transcript
+    /// message above. Styling mirrors `statusBar` (semantic colors, caption).
+    private func proposalCard(_ draft: ProposalDraft) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("Proposed change · \(draft.filename)", systemImage: "doc.badge.gearshape")
+                .font(.caption).bold()
+                .foregroundStyle(Color.primary)
+                .lineLimit(1)
+            Text("Review the full file in the message above before deploying.")
+                .font(.caption2)
+                .foregroundStyle(Color.secondary)
+            Button {
+                vm.deployProposal()
+            } label: {
+                HStack(spacing: 6) {
+                    if vm.deploying { ProgressView().scaleEffect(0.7) }
+                    Text(vm.deploying ? "Deploying…" : "Apply & deploy")
+                }
+                .font(.caption).bold()
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .disabled(vm.deploying)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.secondary.opacity(0.4), lineWidth: 1)
+        )
+        .padding(.horizontal)
+        .padding(.bottom, 4)
+    }
+
+    /// Deploy outcome caption: green for success, red for a failure, secondary
+    /// for an in-flight "Deploying…" message.
+    private func deployStatusCaption(_ status: String) -> some View {
+        let color: Color = status.localizedCaseInsensitiveContains("failed") ? Color.red
+            : status.hasPrefix("Deployed ") ? Color.green
+            : Color.secondary
+        return Text(status)
+            .font(.caption)
+            .foregroundStyle(color)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal)
+            .padding(.bottom, 4)
     }
 
     private var inputBar: some View {
