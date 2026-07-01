@@ -37,6 +37,10 @@ final class AgentChatViewModel: ObservableObject {
     @Published var deployStatus: String? = nil
     /// Whether a deploy is in flight.
     @Published var deploying: Bool = false
+    /// A read-only JS query the agent wants to run, awaiting owner approval.
+    /// Every query is approved individually — there is no auto-run, so the owner
+    /// always sees the exact JS before it touches the page.
+    @Published var pendingInspect: String? = nil
 
     /// Latest Claude session id — echoed back on the next turn for continuity.
     private var sessionId: String? = nil
@@ -57,37 +61,87 @@ final class AgentChatViewModel: ObservableObject {
         guard !text.isEmpty, !busy, let client = client else { return }
         input = ""
         busy = true
+        // A fresh user turn supersedes any pending card the owner bypassed by
+        // typing, so it can't resurface stale after this turn.
+        pendingInspect = nil
+        pendingProposal = nil
+        deployStatus = nil
         messages.append(ChatMessage(role: .user, text: text))
-        messages.append(ChatMessage(role: .assistant, text: ""))
-        let idx = messages.count - 1
         let outgoing = sessionId
-
         Task { [weak self] in
             guard let self else { return }
-            for await ev in client.stream(text: text, sessionId: outgoing) {
-                switch ev {
-                case .delta(let chunk):
-                    if idx < self.messages.count { self.messages[idx].text += chunk }
-                case .session(let id):
-                    if !id.isEmpty { self.sessionId = id }
-                case .snapshot(let ok):
-                    self.snapshotOk = ok
-                case .rate(let status, _):
-                    self.rateStatus = status
-                case .proposal(let f, let c):
-                    self.pendingProposal = ProposalDraft(filename: f, content: c)
-                    self.deployStatus = nil
-                case .error(let message):
-                    if idx < self.messages.count {
-                        let sep = self.messages[idx].text.isEmpty ? "" : "\n"
-                        self.messages[idx].text += "\(sep)⚠️ \(message)"
-                    }
-                case .thinking, .done, .end, .stderr, .unknown:
-                    break
-                }
-            }
+            await self.drive(client.stream(text: text, sessionId: outgoing))
             self.busy = false
             self.persist()
+        }
+    }
+
+    /// Owner approved the pending inspect query — run it and stream the agent's
+    /// continuation.
+    func approveInspect() {
+        guard let js = pendingInspect, let client = client, let sid = sessionId, !busy else { return }
+        pendingInspect = nil
+        busy = true
+        Task { [weak self] in
+            guard let self else { return }
+            await self.drive(client.inspect(js: js, sessionId: sid))
+            self.busy = false
+            self.persist()
+        }
+    }
+
+    /// Owner declined the pending inspect query — tell the agent so it answers
+    /// without the data.
+    func declineInspect() {
+        guard pendingInspect != nil, let client = client, let sid = sessionId, !busy else { return }
+        pendingInspect = nil
+        busy = true
+        Task { [weak self] in
+            guard let self else { return }
+            await self.drive(client.stream(text: "(Owner declined to run that inspection query. Answer without it.)", sessionId: sid))
+            self.busy = false
+            self.persist()
+        }
+    }
+
+    /// Append a fresh assistant message, stream one turn into it, then — if the
+    /// owner enabled "trust this session" — auto-run any inspect query the turn
+    /// requested and keep going until the agent stops asking.
+    /// Append a fresh assistant message and stream one turn into it. Any inspect
+    /// query the turn requests is surfaced as an approval card (via `consume`);
+    /// there is no auto-run, so the owner approves each one explicitly.
+    private func drive(_ stream: AsyncStream<AgentEvent>) async {
+        messages.append(ChatMessage(role: .assistant, text: ""))
+        await consume(stream, into: messages.count - 1)
+    }
+
+    /// Fold one SSE turn's events into the transcript at `idx`.
+    private func consume(_ stream: AsyncStream<AgentEvent>, into idx: Int) async {
+        for await ev in stream {
+            switch ev {
+            case .delta(let chunk):
+                if idx < messages.count { messages[idx].text += chunk }
+            case .session(let id):
+                if !id.isEmpty { sessionId = id }
+            case .snapshot(let ok):
+                snapshotOk = ok
+            case .rate(let status, _):
+                rateStatus = status
+            case .proposal(let f, let c):
+                pendingProposal = ProposalDraft(filename: f, content: c)
+                deployStatus = nil
+            case .inspectRequest(let js):
+                pendingInspect = js
+            case .inspectResult:
+                break
+            case .error(let message):
+                if idx < messages.count {
+                    let sep = messages[idx].text.isEmpty ? "" : "\n"
+                    messages[idx].text += "\(sep)⚠️ \(message)"
+                }
+            case .thinking, .done, .end, .stderr, .unknown:
+                break
+            }
         }
     }
 
@@ -125,6 +179,7 @@ final class AgentChatViewModel: ObservableObject {
         sessionId = nil
         pendingProposal = nil
         deployStatus = nil
+        pendingInspect = nil
         input = ""
         AgentChatStore.clear()
     }

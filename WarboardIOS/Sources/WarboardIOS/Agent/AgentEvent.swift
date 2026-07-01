@@ -21,6 +21,11 @@ enum AgentEvent: Equatable {
     case done(ok: Bool, result: String)
     /// The agent proposes a full userscript file the user can apply + deploy.
     case proposal(filename: String, content: String)
+    /// The agent wants to run this read-only JS query on the live page; the
+    /// owner approves it before it runs.
+    case inspectRequest(js: String)
+    /// An approved inspect query finished running (informational).
+    case inspectResult(ok: Bool)
     /// Stream finished — stop reading.
     case end
     /// Surface to the user.
@@ -51,6 +56,8 @@ func parseAgentSSE(_ dataPayload: String) -> AgentEvent? {
                                   result: o["result"] as? String ?? "")
     case "proposal": return .proposal(filename: o["filename"] as? String ?? "",
                                       content: o["content"] as? String ?? "")
+    case "inspectRequest": return .inspectRequest(js: o["js"] as? String ?? "")
+    case "inspectResult":  return .inspectResult(ok: o["ok"] as? Bool ?? false)
     case "end":      return .end
     case "error":    return .error(o["message"] as? String ?? "error")
     case "stderr":   return .stderr(o["text"] as? String ?? "")

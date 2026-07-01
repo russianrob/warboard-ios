@@ -366,6 +366,8 @@ public struct BrowserView: View {
             model.reload()
         }
         .onAppear {
+            // Owner-only: arm the console-capture hook for the agent's page snapshot.
+            controller.captureConsoleForOwner = isOwner
             // Cheap version.json check (no download) so the Scripts-button badge
             // surfaces an available extension update without opening the screen.
             Task { await ExtensionUpdateStore.shared.check() }

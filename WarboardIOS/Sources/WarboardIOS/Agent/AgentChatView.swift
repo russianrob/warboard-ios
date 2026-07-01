@@ -24,6 +24,9 @@ struct AgentChatView: View {
             if let proposal = vm.pendingProposal {
                 proposalCard(proposal)
             }
+            if let js = vm.pendingInspect, !vm.busy {
+                inspectCard(js)
+            }
             if let status = vm.deployStatus {
                 deployStatusCaption(status)
             }
@@ -153,6 +156,43 @@ struct AgentChatView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal)
             .padding(.bottom, 4)
+    }
+
+    /// Owner approval card for a read-only inspect query the agent proposed:
+    /// the exact JS + Approve/Decline + a "trust this session" toggle. Gated on
+    /// `!vm.busy` so it only shows when a turn isn't actively streaming.
+    private func inspectCard(_ js: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("Agent wants to inspect the page", systemImage: "magnifyingglass")
+                .font(.caption).bold()
+                .foregroundStyle(Color.primary)
+            Text(js)
+                .font(.system(.caption2, design: .monospaced))
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(6)
+                .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+                .lineLimit(8)
+            HStack(spacing: 8) {
+                Button { vm.approveInspect() } label: {
+                    Text("Approve & run").font(.caption).bold()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                Button(role: .cancel) { vm.declineInspect() } label: {
+                    Text("Decline").font(.caption)
+                }
+                .controlSize(.small)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.secondary.opacity(0.4), lineWidth: 1)
+        )
+        .padding(.horizontal)
+        .padding(.bottom, 4)
     }
 
     private var inputBar: some View {

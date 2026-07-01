@@ -39,6 +39,11 @@ final class UserscriptController: NSObject, ObservableObject {
     /// full navigation). Published so the menu shows its state.
     @Published private(set) var devToolsEnabled = false
 
+    /// Owner-only: when true, inject a tiny document-start hook that ring-buffers
+    /// recent console errors/warnings into `window.__wbInspect` so the agent's
+    /// page snapshot can surface them. Set by BrowserView from `isOwner`.
+    var captureConsoleForOwner = false
+
     /// Eruda's bundle source, fetched once natively (so Torn's CSP doesn't
     /// block it) and reused for every (re)injection.
     private var erudaSource: String?
@@ -209,6 +214,9 @@ final class UserscriptController: NSObject, ObservableObject {
         userContent.removeAllUserScripts()
         userContent.addUserScript(WebDiagBridge.probeUserScript())
         userContent.addUserScript(Self.linkFixerUserScript())
+        if captureConsoleForOwner {
+            userContent.addUserScript(Self.consoleCaptureUserScript())
+        }
         for p in planned {
             let ws = WKUserScript(
                 source: p.source,
@@ -252,6 +260,39 @@ final class UserscriptController: NSObject, ObservableObject {
               window.location.assign(a.href);
             }
           }, true);
+        })();
+        """
+        return WKUserScript(source: src, injectionTime: .atDocumentStart,
+                            forMainFrameOnly: false, in: .page)
+    }
+
+    /// Owner-only: buffer recent console errors/warnings + uncaught errors into
+    /// `window.__wbInspect` (page world) so the agent's snapshot can read them.
+    /// Read-only capture — wraps console + error events, never changes behavior.
+    private static func consoleCaptureUserScript() -> WKUserScript {
+        let src = """
+        (function () {
+          if (window.__wbInspect) return;
+          var buf = [], MAX = 40;
+          function push(kind, args) {
+            try {
+              var msg = Array.prototype.map.call(args, function (a) {
+                try { return typeof a === 'string' ? a : JSON.stringify(a); } catch (e) { return String(a); }
+              }).join(' ');
+              buf.push({ kind: kind, msg: msg.slice(0, 400) });
+              if (buf.length > MAX) buf.shift();
+            } catch (e) {}
+          }
+          var oe = console.error, ow = console.warn;
+          console.error = function () { push('error', arguments); return oe.apply(console, arguments); };
+          console.warn = function () { push('warn', arguments); return ow.apply(console, arguments); };
+          window.addEventListener('error', function (e) {
+            push('uncaught', [(e && e.message) || 'error', '@', (e && e.filename) || '', (e && e.lineno) || '']);
+          });
+          window.addEventListener('unhandledrejection', function (e) {
+            push('promise', [String((e && e.reason) || 'rejection')]);
+          });
+          window.__wbInspect = { console: buf };
         })();
         """
         return WKUserScript(source: src, injectionTime: .atDocumentStart,

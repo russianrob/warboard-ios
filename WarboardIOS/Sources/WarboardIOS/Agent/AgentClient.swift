@@ -14,9 +14,24 @@ struct AgentClient {
     let jwt: String
 
     func stream(text: String, sessionId: String?) -> AsyncStream<AgentEvent> {
+        var body: [String: Any] = ["text": text]
+        if let sessionId = sessionId { body["sessionId"] = sessionId }
+        return openStream(path: "/api/agent/message", body: body)
+    }
+
+    /// Run an owner-approved READ-ONLY inspect query on the live page via
+    /// `POST <baseUrl>/api/agent/inspect`. The server runs the JS then resumes
+    /// the agent, so this streams the continuation exactly like `stream`.
+    func inspect(js: String, sessionId: String) -> AsyncStream<AgentEvent> {
+        openStream(path: "/api/agent/inspect", body: ["js": js, "sessionId": sessionId])
+    }
+
+    /// Shared SSE POST: opens `<baseUrl><path>`, decodes `data:` frames into
+    /// `AgentEvent`s, and finishes on `.end`, cancellation, or error.
+    private func openStream(path: String, body: [String: Any]) -> AsyncStream<AgentEvent> {
         AsyncStream { continuation in
             let task = Task {
-                guard let url = URL(string: baseUrl + "/api/agent/message") else {
+                guard let url = URL(string: baseUrl + path) else {
                     continuation.yield(.error("bad server URL"))
                     continuation.finish()
                     return
@@ -26,8 +41,6 @@ struct AgentClient {
                 req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
                 req.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 req.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-                var body: [String: Any] = ["text": text]
-                if let sessionId = sessionId { body["sessionId"] = sessionId }
                 req.httpBody = try? JSONSerialization.data(withJSONObject: body)
                 // Long-lived stream; a per-turn wall-clock cap is enforced
                 // server-side, so this is just an upper safety bound.
