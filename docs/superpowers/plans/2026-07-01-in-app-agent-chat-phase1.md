@@ -334,7 +334,14 @@ import { spawn } from "node:child_process";
 const CLAUDE = process.env.CLAUDE_BIN || "/root/.local/bin/claude";
 const WORKDIR = process.env.AGENT_WORKDIR || "/opt/warboard/server/data/agent-workdir";
 const MCP_CONFIG = process.env.AGENT_MCP_CONFIG || "/opt/warboard/server/data/agent-mcp.json";
-const DISALLOWED = ["Bash","Edit","Write","Read","NotebookEdit","WebFetch","WebSearch","Task","Glob","Grep"];
+// SECURITY: deny EVERY built-in tool so only the scoped MCP inspect tools remain.
+// Validated live 2026-07-01: with this exact list the agent enumerates ONLY
+// mcp__warboard-inspect__inspect_run_js + inspect_screenshot. Notes:
+//  - An allow-list (--allowed-tools) does NOT restrict under --permission-mode default (Bash still ran).
+//  - The init event's tools[] is NOT exhaustive: Glob/Grep are present but unlisted — deny them explicitly.
+//  - bypassPermissions maps to --dangerously-skip-permissions which refuses under root;
+//    IS_SANDBOX=1 (set in the spawn env below) bypasses only that root guard, Bash stays blocked.
+const DISALLOWED = ["Task","Bash","CronCreate","CronDelete","CronList","DesignSync","Edit","EnterWorktree","ExitWorktree","Monitor","NotebookEdit","PushNotification","Read","RemoteTrigger","ReportFindings","ScheduleWakeup","SendMessage","Skill","TaskCreate","TaskGet","TaskList","TaskOutput","TaskStop","TaskUpdate","ToolSearch","WebFetch","WebSearch","Workflow","Write","Glob","Grep"];
 const TURN_TIMEOUT_MS = Number(process.env.AGENT_TURN_TIMEOUT_MS || 180000);
 
 export function normalizeStreamLine(o) {
@@ -374,7 +381,7 @@ export function runAgentTurn({ text, sessionId, onEvent, signal }) {
       "--permission-mode", "bypassPermissions",
       "--disallowed-tools", ...DISALLOWED];
     if (sessionId) args.push("--resume", sessionId);
-    const child = spawn(CLAUDE, args, { cwd: WORKDIR, env: { ...process.env }, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(CLAUDE, args, { cwd: WORKDIR, env: { ...process.env, IS_SANDBOX: process.env.IS_SANDBOX || "1" }, stdio: ["ignore", "pipe", "pipe"] });
     let resolvedSession = sessionId || null;
     let buf = "";
     const killTimer = setTimeout(() => { onEvent({ t: "error", message: "agent turn timed out" }); child.kill("SIGKILL"); }, TURN_TIMEOUT_MS);
