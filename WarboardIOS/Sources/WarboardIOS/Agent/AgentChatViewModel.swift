@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import WarboardIOS
 
 enum ChatRole: String, Codable {
     case user
@@ -49,12 +50,7 @@ final class AgentChatViewModel: ObservableObject {
     /// ContentView) so the transcript survives closing/reopening the sheet.
     var client: AgentClient? = nil
 
-    /// The on-device userscript store — read to send the installed manifest and
-    /// written when the owner approves a proposal.
-    let registry: ScriptRegistry
-
-    init(registry: ScriptRegistry = .shared) {
-        self.registry = registry
+    init() {
         if let saved = AgentChatStore.load() {
             messages = saved.messages
             sessionId = saved.sessionId
@@ -73,7 +69,7 @@ final class AgentChatViewModel: ObservableObject {
         deployStatus = nil
         messages.append(ChatMessage(role: .user, text: text))
         let outgoing = sessionId
-        let manifest = InstalledManifest.build(from: registry.all()).asJSONBody()
+        let manifest = AgentInstallBridge.installedManifestJSON()
         Task { [weak self] in
             guard let self else { return }
             await self.drive(client.stream(text: text, sessionId: outgoing, installedScripts: manifest))
@@ -88,7 +84,7 @@ final class AgentChatViewModel: ObservableObject {
         guard let js = pendingInspect, let client = client, let sid = sessionId, !busy else { return }
         pendingInspect = nil
         busy = true
-        let manifest = InstalledManifest.build(from: registry.all()).asJSONBody()
+        let manifest = AgentInstallBridge.installedManifestJSON()
         Task { [weak self] in
             guard let self else { return }
             await self.drive(client.inspect(js: js, sessionId: sid, installedScripts: manifest))
@@ -103,7 +99,7 @@ final class AgentChatViewModel: ObservableObject {
         guard pendingInspect != nil, let client = client, let sid = sessionId, !busy else { return }
         pendingInspect = nil
         busy = true
-        let manifest = InstalledManifest.build(from: registry.all()).asJSONBody()
+        let manifest = AgentInstallBridge.installedManifestJSON()
         Task { [weak self] in
             guard let self else { return }
             await self.drive(client.stream(text: "(Owner declined to run that inspection query. Answer without it.)", sessionId: sid, installedScripts: manifest))
@@ -153,7 +149,7 @@ final class AgentChatViewModel: ObservableObject {
         }
     }
 
-    /// Apply the pending proposal: install it on-device via `LocalInstaller` and
+    /// Apply the pending proposal: install it on-device via `AgentInstallBridge` and
     /// POST it to the server as a backup, then surface the outcome via
     /// `deployStatus`. Clears the proposal on success.
     func deployProposal() {
@@ -166,7 +162,7 @@ final class AgentChatViewModel: ObservableObject {
             let result = await client.deploy(filename: draft.filename, content: draft.content)
             let downloadURL = client.baseUrl + "/scripts/" + draft.filename
             do {
-                try await LocalInstaller(registry: self.registry)
+                try await AgentInstallBridge
                     .install(filename: draft.filename, content: draft.content, downloadURL: downloadURL)
                 self.deployStatus = "Installed \(draft.filename) — reload the Torn page to see it."
                     + (result.ok ? "" : " (server backup failed: \(result.message))")
