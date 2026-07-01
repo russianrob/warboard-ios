@@ -1,6 +1,6 @@
 import Foundation
 
-struct LocalInstaller {
+@MainActor struct LocalInstaller {
     enum InstallError: Error, Equatable {
         case noMatch
         case parse(String)
@@ -9,12 +9,14 @@ struct LocalInstaller {
     let registry: ScriptRegistry
     let resolver: RequireResolver
 
+    #if canImport(Darwin)
     init(registry: ScriptRegistry = ScriptRegistry.shared,
          requireCache: RequireCache = RequireCache(root: RequireCache.defaultRoot()),
          session: URLSession = .shared) {
         self.registry = registry
         self.resolver = RequireResolver.live(cache: requireCache, session: session)
     }
+    #endif
 
     /// Test seam: inject a resolver with a stub fetch.
     init(registry: ScriptRegistry, resolver: RequireResolver) {

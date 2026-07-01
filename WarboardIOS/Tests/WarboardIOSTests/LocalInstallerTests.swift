@@ -1,6 +1,7 @@
 import XCTest
 @testable import WarboardIOS
 
+@MainActor
 final class LocalInstallerTests: XCTestCase {
     private func tempInstaller() -> (LocalInstaller, ScriptRegistry) {
         let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)

@@ -13,7 +13,7 @@ struct ChatMessage: Identifiable, Equatable, Codable {
 }
 
 /// A full userscript file the agent proposed this turn, awaiting the user's
-/// "Apply & deploy" confirmation.
+/// "Approve & install" confirmation.
 struct ProposalDraft: Equatable {
     let filename: String
     let content: String
@@ -31,7 +31,7 @@ final class AgentChatViewModel: ObservableObject {
     @Published var snapshotOk: Bool = false
     /// Latest quota status (from `rate`); nil until the server reports one.
     @Published var rateStatus: String? = nil
-    /// A proposed userscript change awaiting "Apply & deploy" (from `proposal`).
+    /// A proposed userscript change awaiting "Approve & install" (from `proposal`).
     @Published var pendingProposal: ProposalDraft? = nil
     /// Deploy outcome/progress message; nil = idle.
     @Published var deployStatus: String? = nil
@@ -153,8 +153,9 @@ final class AgentChatViewModel: ObservableObject {
         }
     }
 
-    /// Apply the pending proposal by POSTing it to the deploy endpoint, then
-    /// surface the outcome via `deployStatus`. Clears the proposal on success.
+    /// Apply the pending proposal: install it on-device via `LocalInstaller` and
+    /// POST it to the server as a backup, then surface the outcome via
+    /// `deployStatus`. Clears the proposal on success.
     func deployProposal() {
         guard let draft = pendingProposal, !deploying, let client = client else { return }
         deploying = true
