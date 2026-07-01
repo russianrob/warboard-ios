@@ -86,6 +86,11 @@ struct SettingsView: View {
                     }
                     Text("Lets the warboard agent run JS in the in-app browser and capture screenshots over the internet, for debugging. Off by default; auto-turns off after 30 min idle.")
                         .font(.caption).foregroundColor(.secondary)
+                    NavigationLink("Agent chat") {
+                        AgentChatView(client: AgentClient(baseUrl: prefs.baseUrl, jwt: auth.token))
+                    }
+                    Text("Chat with the warboard agent; it reads this app's live browser via the inspect loop (armed while the chat is open).")
+                        .font(.caption2).foregroundColor(.secondary)
                 }
             }
 
