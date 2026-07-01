@@ -13,17 +13,20 @@ struct AgentClient {
     let baseUrl: String
     let jwt: String
 
-    func stream(text: String, sessionId: String?) -> AsyncStream<AgentEvent> {
+    func stream(text: String, sessionId: String?, installedScripts: [[String: Any]]) -> AsyncStream<AgentEvent> {
         var body: [String: Any] = ["text": text]
         if let sessionId = sessionId { body["sessionId"] = sessionId }
+        if !installedScripts.isEmpty { body["installedScripts"] = installedScripts }
         return openStream(path: "/api/agent/message", body: body)
     }
 
     /// Run an owner-approved READ-ONLY inspect query on the live page via
     /// `POST <baseUrl>/api/agent/inspect`. The server runs the JS then resumes
     /// the agent, so this streams the continuation exactly like `stream`.
-    func inspect(js: String, sessionId: String) -> AsyncStream<AgentEvent> {
-        openStream(path: "/api/agent/inspect", body: ["js": js, "sessionId": sessionId])
+    func inspect(js: String, sessionId: String, installedScripts: [[String: Any]]) -> AsyncStream<AgentEvent> {
+        var body: [String: Any] = ["js": js, "sessionId": sessionId]
+        if !installedScripts.isEmpty { body["installedScripts"] = installedScripts }
+        return openStream(path: "/api/agent/inspect", body: body)
     }
 
     /// Shared SSE POST: opens `<baseUrl><path>`, decodes `data:` frames into

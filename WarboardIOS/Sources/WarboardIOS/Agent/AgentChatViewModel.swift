@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import WarboardIOS
 
 enum ChatRole: String, Codable {
     case user
@@ -13,7 +14,7 @@ struct ChatMessage: Identifiable, Equatable, Codable {
 }
 
 /// A full userscript file the agent proposed this turn, awaiting the user's
-/// "Apply & deploy" confirmation.
+/// "Approve & install" confirmation.
 struct ProposalDraft: Equatable {
     let filename: String
     let content: String
@@ -31,7 +32,7 @@ final class AgentChatViewModel: ObservableObject {
     @Published var snapshotOk: Bool = false
     /// Latest quota status (from `rate`); nil until the server reports one.
     @Published var rateStatus: String? = nil
-    /// A proposed userscript change awaiting "Apply & deploy" (from `proposal`).
+    /// A proposed userscript change awaiting "Approve & install" (from `proposal`).
     @Published var pendingProposal: ProposalDraft? = nil
     /// Deploy outcome/progress message; nil = idle.
     @Published var deployStatus: String? = nil
@@ -68,9 +69,10 @@ final class AgentChatViewModel: ObservableObject {
         deployStatus = nil
         messages.append(ChatMessage(role: .user, text: text))
         let outgoing = sessionId
+        let manifest = AgentInstallBridge.installedManifestJSON()
         Task { [weak self] in
             guard let self else { return }
-            await self.drive(client.stream(text: text, sessionId: outgoing))
+            await self.drive(client.stream(text: text, sessionId: outgoing, installedScripts: manifest))
             self.busy = false
             self.persist()
         }
@@ -82,9 +84,10 @@ final class AgentChatViewModel: ObservableObject {
         guard let js = pendingInspect, let client = client, let sid = sessionId, !busy else { return }
         pendingInspect = nil
         busy = true
+        let manifest = AgentInstallBridge.installedManifestJSON()
         Task { [weak self] in
             guard let self else { return }
-            await self.drive(client.inspect(js: js, sessionId: sid))
+            await self.drive(client.inspect(js: js, sessionId: sid, installedScripts: manifest))
             self.busy = false
             self.persist()
         }
@@ -96,9 +99,10 @@ final class AgentChatViewModel: ObservableObject {
         guard pendingInspect != nil, let client = client, let sid = sessionId, !busy else { return }
         pendingInspect = nil
         busy = true
+        let manifest = AgentInstallBridge.installedManifestJSON()
         Task { [weak self] in
             guard let self else { return }
-            await self.drive(client.stream(text: "(Owner declined to run that inspection query. Answer without it.)", sessionId: sid))
+            await self.drive(client.stream(text: "(Owner declined to run that inspection query. Answer without it.)", sessionId: sid, installedScripts: manifest))
             self.busy = false
             self.persist()
         }
@@ -145,21 +149,27 @@ final class AgentChatViewModel: ObservableObject {
         }
     }
 
-    /// Apply the pending proposal by POSTing it to the deploy endpoint, then
-    /// surface the outcome via `deployStatus`. Clears the proposal on success.
+    /// Apply the pending proposal: install it on-device via `AgentInstallBridge` and
+    /// POST it to the server as a backup, then surface the outcome via
+    /// `deployStatus`. Clears the proposal on success.
     func deployProposal() {
         guard let draft = pendingProposal, !deploying, let client = client else { return }
         deploying = true
-        deployStatus = "Deploying \(draft.filename)…"
+        deployStatus = "Installing \(draft.filename)…"
 
         Task { [weak self] in
             guard let self else { return }
             let result = await client.deploy(filename: draft.filename, content: draft.content)
-            if result.ok {
-                self.deployStatus = result.message
+            let downloadURL = client.baseUrl + "/scripts/" + draft.filename
+            do {
+                try await AgentInstallBridge
+                    .install(filename: draft.filename, content: draft.content, downloadURL: downloadURL)
+                self.deployStatus = "Installed \(draft.filename) — reload the Torn page to see it."
+                    + (result.ok ? "" : " (server backup failed: \(result.message))")
                 self.pendingProposal = nil
-            } else {
-                self.deployStatus = "Deploy failed: \(result.message)"
+            } catch {
+                self.deployStatus = "Couldn't install \(draft.filename): \(error.localizedDescription)"
+                    + (result.ok ? " (saved to your server collection)" : "")
             }
             self.deploying = false
         }

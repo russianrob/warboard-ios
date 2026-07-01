@@ -168,7 +168,7 @@ struct AgentChatView: View {
                 } label: {
                     HStack(spacing: 6) {
                         if vm.deploying { ProgressView().scaleEffect(0.7) }
-                        Text(vm.deploying ? "Deploying…" : "Apply & deploy")
+                        Text(vm.deploying ? "Installing…" : "Approve & install")
                     }
                     .font(.caption).bold()
                 }
@@ -192,12 +192,19 @@ struct AgentChatView: View {
         .padding(.bottom, 4)
     }
 
-    /// Deploy outcome caption: green for success, red for a failure, secondary
-    /// for an in-flight "Deploying…" message.
+    /// Install outcome caption: green for success, red for a failure, secondary
+    /// for an in-flight "Installing…" message. Keyed off the leading word so a
+    /// success caption still reads green even when it carries a trailing
+    /// "(server backup failed: …)" suffix.
     private func deployStatusCaption(_ status: String) -> some View {
-        let color: Color = status.localizedCaseInsensitiveContains("failed") ? Color.red
-            : status.hasPrefix("Deployed ") ? Color.green
-            : Color.secondary
+        let color: Color
+        if status.hasPrefix("Installed ") || status.hasPrefix("Deployed ") {
+            color = Color.green
+        } else if status.hasPrefix("Couldn't install") {
+            color = Color.red
+        } else {
+            color = Color.secondary
+        }
         return Text(status)
             .font(.caption)
             .foregroundStyle(color)

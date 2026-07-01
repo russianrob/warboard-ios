@@ -103,8 +103,8 @@ final class InstallViewModel: ObservableObject {
         guard let meta, let source, let url = sourceURL else { return }
         phase = .installing
         do {
-            var script = Self.makeScript(from: meta, source: source,
-                                         downloadURL: url.absoluteString)
+            var script = ScriptFactory.make(from: meta, source: source,
+                                            downloadURL: url.absoluteString)
             try await resolver.resolve(script)
             if let existing {
                 script.id = existing.id
@@ -139,32 +139,6 @@ final class InstallViewModel: ObservableObject {
         return installed.first {
             $0.downloadURL == downloadURL || $0.downloadURL == urlString
         }
-    }
-
-    private static func makeScript(from meta: ScriptMetadata,
-                                   source: String,
-                                   downloadURL: String) -> Userscript {
-        Userscript(
-            id: SHA256Pure.hexDigest(downloadURL),
-            name: meta.name ?? downloadURL,
-            namespace: meta.namespace,
-            version: meta.version,
-            description: meta.description,
-            matches: meta.matches,
-            includes: meta.includes,
-            excludes: meta.excludes,
-            requires: meta.requires,
-            connects: meta.connects,
-            grants: meta.grants,
-            runAt: meta.runAt,
-            icon: meta.icon,
-            downloadURL: meta.downloadURL ?? downloadURL,
-            updateURL: meta.updateURL,
-            enabled: true,
-            order: 0,
-            source: source,
-            wildcardConnectGranted: false
-        )
     }
 }
 

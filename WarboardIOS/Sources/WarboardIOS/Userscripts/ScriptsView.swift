@@ -39,7 +39,7 @@ final class ScriptsViewModel: ObservableObject {
                 return
             }
             let meta = try MetadataParser.parse(source)
-            let script = Self.makeScript(from: meta, source: source, downloadURL: u.absoluteString)
+            let script = ScriptFactory.make(from: meta, source: source, downloadURL: u.absoluteString)
             try await resolver.resolve(script)
             try registry.add(script)
             addURLText = ""
@@ -103,7 +103,7 @@ final class ScriptsViewModel: ObservableObject {
             let (data, _) = try await session.data(from: u)
             guard let source = String(data: data, encoding: .utf8) else { return }
             let meta = try MetadataParser.parse(source)
-            var fresh = Self.makeScript(from: meta, source: source, downloadURL: urlStr)
+            var fresh = ScriptFactory.make(from: meta, source: source, downloadURL: urlStr)
             try await resolver.resolve(fresh, forceRefetch: true)
             fresh.id = script.id
             fresh.enabled = script.enabled
@@ -136,8 +136,8 @@ final class ScriptsViewModel: ObservableObject {
         defer { isWorking = false }
         do {
             let meta = try MetadataParser.parse(newSource)
-            var fresh = Self.makeScript(from: meta, source: newSource,
-                                        downloadURL: script.downloadURL ?? script.id)
+            var fresh = ScriptFactory.make(from: meta, source: newSource,
+                                           downloadURL: script.downloadURL ?? script.id)
             fresh.id = script.id
             fresh.enabled = script.enabled
             fresh.order = script.order
@@ -149,32 +149,6 @@ final class ScriptsViewModel: ObservableObject {
         } catch {
             errorMessage = "Save failed: \(error.localizedDescription)"
         }
-    }
-
-    private static func makeScript(from meta: ScriptMetadata,
-                                   source: String,
-                                   downloadURL: String) -> Userscript {
-        Userscript(
-            id: SHA256Pure.hexDigest(downloadURL),
-            name: meta.name ?? downloadURL,
-            namespace: meta.namespace,
-            version: meta.version,
-            description: meta.description,
-            matches: meta.matches,
-            includes: meta.includes,
-            excludes: meta.excludes,
-            requires: meta.requires,
-            connects: meta.connects,
-            grants: meta.grants,
-            runAt: meta.runAt,
-            icon: meta.icon,
-            downloadURL: meta.downloadURL ?? downloadURL,
-            updateURL: meta.updateURL,
-            enabled: true,
-            order: 0,
-            source: source,
-            wildcardConnectGranted: false
-        )
     }
 
     private static func message(for error: MetadataParseError) -> String {
