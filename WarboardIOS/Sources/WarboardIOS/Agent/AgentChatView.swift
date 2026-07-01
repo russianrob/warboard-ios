@@ -69,9 +69,7 @@ struct AgentChatView: View {
                             Text(m.role == .user ? "You" : "Agent")
                                 .font(.caption2).bold()
                                 .foregroundStyle(m.role == .user ? Color.accentColor : Color.secondary)
-                            Text(m.text.isEmpty ? "…" : m.text)
-                                .font(.system(.callout, design: .monospaced))
-                                .textSelection(.enabled)
+                            SelectableText(text: m.text.isEmpty ? "…" : m.text)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .id(m.id)
@@ -209,5 +207,36 @@ struct AgentChatView: View {
             .disabled(vm.busy || vm.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .padding()
+    }
+}
+
+/// A non-editable, self-sizing `UITextView` so message text is reliably
+/// selectable — long-press to start a selection, drag the handles, then Copy
+/// (or Select All). More robust than SwiftUI `.textSelection` inside a
+/// `ScrollView`, where the scroll gesture swallows the long-press needed to
+/// begin selecting. `isScrollEnabled = false` lets it grow to fit so the outer
+/// ScrollView still handles scrolling.
+private struct SelectableText: UIViewRepresentable {
+    let text: String
+
+    func makeUIView(context: Context) -> UITextView {
+        let tv = UITextView()
+        tv.isEditable = false
+        tv.isSelectable = true
+        tv.isScrollEnabled = false
+        tv.backgroundColor = .clear
+        tv.textContainerInset = .zero
+        tv.textContainer.lineFragmentPadding = 0
+        tv.adjustsFontForContentSizeCategory = true
+        tv.font = UIFont.monospacedSystemFont(
+            ofSize: UIFont.preferredFont(forTextStyle: .callout).pointSize, weight: .regular)
+        tv.textColor = .label
+        tv.setContentCompressionResistancePriority(.required, for: .vertical)
+        tv.setContentHuggingPriority(.required, for: .vertical)
+        return tv
+    }
+
+    func updateUIView(_ tv: UITextView, context: Context) {
+        if tv.text != text { tv.text = text }
     }
 }
